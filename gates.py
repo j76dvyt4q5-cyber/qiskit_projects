@@ -20,3 +20,15 @@ Y = Operator([[0, -1j],
 #Hadamard Gate
 H = Operator([[1/np.sqrt(2), 1/np.sqrt(2)],
              [1/np.sqrt(2), -1/np.sqrt(2)]])
+
+#Phase Gate
+P = Operator([[1, 0],
+             [0, np.exp(1j * np.pi / 2)]])
+
+#S Gate
+S = Operator([[1, 0],
+              [0, 1j]])
+
+#T Gate
+T = Operator([[1, 0],
+              [0, np.exp(1j * np.pi / 4)]])
