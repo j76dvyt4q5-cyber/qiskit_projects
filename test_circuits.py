@@ -22,6 +22,7 @@ print(counts)
 qc = QuantumCircuit(2)
 qc.h(0)
 qc.cx(0, 1)
+qc.h(0)  # Extra Hadamard gate on qubit 0
 qc.measure_all()
 qc.draw(output="text")
 
@@ -36,7 +37,22 @@ qc = QuantumCircuit(2, 2)
 qc.h(0)
 qc.measure(0, 0)
 qc.cx(0, 1)
+qc.h(0) # This Hadamard gate is now operating on a collapsed qubit0
 qc.measure(1, 1)
+qc.draw(output="text")
+
+sim = AerSimulator()
+t_qc = transpile(qc, sim)
+result = sim.run(t_qc).result()
+counts = result.get_counts()
+print(counts)
+
+#Phase gate circuit
+qc = QuantumCircuit(1)
+qc.h(0)
+qc.t(0)
+qc.h(0)
+qc.measure_all()
 qc.draw(output="text")
 
 sim = AerSimulator()
@@ -47,5 +63,12 @@ print(counts)
 
 
 
+#git status THEN
+
+#git add . THEN
+
+#git commit -m "What I did" THEN
+
+#git push
 
 
