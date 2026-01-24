@@ -50,7 +50,7 @@ print(counts)
 #Phase gate circuit
 qc = QuantumCircuit(1)
 qc.h(0)
-qc.t(0)
+qc.x(0)
 qc.h(0)
 qc.measure_all()
 qc.draw(output="text")
