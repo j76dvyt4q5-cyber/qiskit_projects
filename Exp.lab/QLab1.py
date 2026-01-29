@@ -26,9 +26,9 @@ print(counts)
 qc = QuantumCircuit(2)
 
 qc.ry(np.pi, 1) #Rotates q1 to |1>
-qc.rz(np.pi/2, 0) #Rotates q0 to superposition state
-
-qc.h(0) #Creates interferance, revealing rotation gates
+qc.rz(np.pi/2, 0) #Rotates q0 to hidden state
+qc.rx(np.pi/4, 0) #Further rotates q0
+qc.h(0) #Creates interferance, converting phase + rotation into measurable bias
 qc.measure_all()
 qc.draw(output="text")
 
@@ -104,3 +104,6 @@ t_qc = transpile(qc, sim)
 result = sim.run(t_qc).result()
 counts = result.get_counts()
 print(counts)
+
+#Irreversibility Test
+qc = QuantumCircuit(1, 1)
