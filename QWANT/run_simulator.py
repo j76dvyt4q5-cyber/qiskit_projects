@@ -1,4 +1,4 @@
-from QWANT.backend import simulate_circuit
+from backend import simulate_circuit
 
 result = simulate_circuit(
     n_qubits=1,
