@@ -1,10 +1,3 @@
 from backend import simulate_circuit
 
-result = simulate_circuit(
-    n_qubits=1,
-    init="0",
-    gates=[],
-    shots=1024
-)
-
-print(result)
+print(simulate_circuit(n_qubits=2, init="10", gates=[]))
