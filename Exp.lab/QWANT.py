@@ -42,7 +42,7 @@ print(counts)
 
 def t_2():
     if counts == {"00": 512, "11": 512}: #write code for something that can 
-        #detect outputs withint a certain range
+        #detect outputs within a certain range
         print("Test passed!")
     else: 
         print("Test failed. Expected {'00': 512, '11': 512}, got", counts)
