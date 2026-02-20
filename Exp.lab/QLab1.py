@@ -5,6 +5,7 @@ from qiskit_aer import AerSimulator
 from qiskit import transpile
 from gates import I, X, Y, Z, H, P, S, T
 from states import ket0, ket1, ket00, ket01, ket10, ket11
+from qiskit.visualization import array_to_latex
 
 #CCNOT Gate Circuit on 3 qubits, 1 swapped and 1 superimposed
 #Creates a X(0)*H(1)*CCX(0,1,2) state
@@ -25,12 +26,13 @@ print(counts)
 #Rotation Gate Circuit
 qc = QuantumCircuit(2)
 
-qc.ry(np.pi, 1) #Rotates q1 to |1>
-qc.rz(np.pi/2, 0) #Rotates q0 to hidden state
-qc.rx(np.pi/4, 0) #Further rotates q0
+#qc.ry(np.pi, 1) #Rotates q1 to |1>
+qc.rz(np.pi/4, 0) #Rotates q0 to hidden state
+#qc.rx(np.pi/4, 0) #Further rotates q0
 qc.h(0) #Creates interferance, converting phase + rotation into measurable bias
 qc.measure_all()
 qc.draw(output="text")
+
 
 sim = AerSimulator()
 t_qc = transpile(qc, sim)
@@ -93,10 +95,10 @@ counts = result.get_counts()
 print(counts)
 
 #Phase Test
-qc = QuantumCircuit(1)
+qc = QuantumCircuit(2)
 qc.h(0)
-qc.t(0)
-qc.h(0)
+qc.cx(0, 1)
+qc.cx(1, 0)
 qc.measure_all()
 qc.draw(output="text")
 sim = AerSimulator()
@@ -105,5 +107,23 @@ result = sim.run(t_qc).result()
 counts = result.get_counts()
 print(counts)
 
-#Irreversibility Test
-qc = QuantumCircuit(1, 1)
+#Other Tests
+qc = QuantumCircuit(3)
+qc.h(0)
+qc.h(1)
+qc.h(2)
+simulator = AerSimulator()
+compiled_circuit = transpile(qc, simulator)
+job = simulator.run(compiled_circuit, shots=1)
+result = job.result()
+statevector = result.get_statevector(qc)
+array_to_latex(statevector, prefix="\text{Statevector= }")
+
+
+'''qc.measure_all()
+qc.draw(output="text")
+sim = AerSimulator()
+t_qc = transpile(qc, sim)
+result = sim.run(t_qc).result()
+counts = result.get_counts()
+print(counts)'''
