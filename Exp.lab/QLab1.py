@@ -15,6 +15,8 @@ def measure_qc_1024():
     print(counts)
 
 
+
+
 #CCNOT Gate Circuit on 3 qubits, 1 swapped and 1 superimposed
 #Creates a X(0)*H(1)*CCX(0,1,2) state
 qc = QuantumCircuit(3)
@@ -120,4 +122,9 @@ qc.h((q_0, q_1, q_2))
 qc.ch(q_0, q_2)
 qc.cz(q_1, q_2)
 qc.ch(q_0, q_2)
+measure_qc_1024()
+
+qc = QuantumCircuit(1)
+qc.h(0)
+qc.s(0)
 measure_qc_1024()
