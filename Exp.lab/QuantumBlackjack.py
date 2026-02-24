@@ -19,9 +19,9 @@ def measure_qc_card_cout(qc):
     qc.measure(card, c_out)
     sim = AerSimulator()
     t_qc = transpile(qc, sim)
-    result = sim.run(t_qc).result()
+    result = sim.run(t_qc, shots=1).result()
     counts = result.get_counts()
-    print(counts)
+    return(counts)
 
 def qc_variables(n):
     global qc_0, qc_1, qc_2
@@ -56,11 +56,33 @@ def apply_self_gate(qc, card, self_gate, target_index, strength=None):
     else:
         print("Invalid gate. Try again")
 
+def bit_to_card(counts):
+    bitstring = list(counts.keys())[0][::-1]
+    card_mapping = {
+        '0000': 'Unknown',
+        '0001': '1',
+        '0010': '2',
+        '0011': '3',
+        '0100': '4',
+        '0101': '5',
+        '0110': '6',
+        '0111': '7',
+        '1000': '8',
+        '1001': '9',
+        '1010': '10',
+        '1011': 'Jack',
+        '1100': 'Queen',
+        '1101': 'King',
+        '1110': 'Unknown',
+        '1111': 'Unknown'
+    }
+    card_value = card_mapping.get(bitstring, 'Unknown')
+    return card_value
 #Initialization of Table and Cards
 card = QuantumRegister(4, "card")
 table = QuantumRegister(2, "table")
 c_out = ClassicalRegister(4, "c_out")
-qc = QuantumCircuit(card, table, c_out) #Sample circuit
+qc = QuantumCircuit(card, table, c_out) 
 qc.h(card)
 qc.h(table[1])
 
@@ -68,10 +90,13 @@ qc.h(table[1])
 control_table = int(input("Choose your control table bit (0-1): "))
 target_hand = int(input("Choose your target hand bit (0-3): "))
 table_card_gate = input("Choose the gate to apply between table and card (CRY, CX, CZ): ").strip().upper()
-mode = input("Mode (h = help, s = sabotage): ").lower()
-sign = +1 if mode == "h" else -1
-strength = int(input("Strength (1-3): "))
-theta_table = sign * [0.0, 0.4, 0.8, 1.2][strength]
+if table_card_gate == "CRY":
+    mode = input("Mode (h = help, s = sabotage): ").lower()
+    sign = +1 if mode == "h" else -1
+    strength = int(input("Strength (1-3): "))
+    theta_table = sign * [0.0, 0.4, 0.8, 1.2][strength]
+else:
+    theta_table = None
 apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
 
 #Self Gate on Card
@@ -85,7 +110,9 @@ else:
 
 apply_self_gate(qc, card, self_gate, target_self, theta_self)
 
-measure_qc_card_cout(qc)
-
+counts = measure_qc_card_cout(qc)
+card = bit_to_card(counts)
+print("Counts is", counts)
+print("You drew", card)
 
         
