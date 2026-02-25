@@ -23,7 +23,10 @@ def measure_qc_card_cout(qc):
     result = sim.run(t_qc, shots=1).result()
     counts = result.get_counts()
     return(counts)
+<<<<<<< HEAD
 
+=======
+>>>>>>> 93d6703447e020093e1f6eaa5b56a2273528159c
 
 def qc_variables(n):
     global qc_0, qc_1, qc_2
@@ -58,6 +61,7 @@ def apply_self_gate(qc, card, self_gate, target_index, strength=None):
     else:
         print("Invalid gate. Try again")
 
+<<<<<<< HEAD
 def bit_to_card(counts):
     bitstring = list(counts.keys())[0][::-1]  # Reverse the bitstring to match the order of qubits
     card_mapping = {
@@ -81,14 +85,63 @@ def bit_to_card(counts):
 
     card_value = card_mapping.get(bitstring, 'Unknown')
     return card_value
+=======
+player_total = 0
+ace_count = 0
+def bit_to_card(counts):
+    bitstring = list(counts.keys())[0]
+    card_mapping = {
+        '0000': 'Unknown',
+        '0001': 'Ace',
+        '0010': '2',
+        '0011': '3',
+        '0100': '4',
+        '0101': '5',
+        '0110': '6',
+        '0111': '7',
+        '1000': '8',
+        '1001': '9',
+        '1010': '10',
+        '1011': 'Jack',
+        '1100': 'Queen',
+        '1101': 'King',
+        '1110': 'Ace',
+        '1111': 'Unknown'
+    }
+    card_value = card_mapping.get(bitstring, 'Unknown')
+    return card_value
+def card_to_value(card):
+    card = card.strip()
+    if card in ['Jack', 'Queen', 'King']:
+        return 10
+    elif card == 'Ace':
+        return 11
+    if card == 'Unknown':
+        return 0
+    if card.isdigit():
+        return int(card)
+    return 0
+
+def add_card_to_total(card, player_total, ace_count):
+    if card == 'Ace':
+        player_total += 11
+        ace_count += 1
+    else:
+        player_total += card_to_value(card)
+    while player_total > 21 and ace_count > 0:
+        player_total -= 10
+        ace_count -= 1
+    return player_total, ace_count
+    
+>>>>>>> 93d6703447e020093e1f6eaa5b56a2273528159c
 
 #Initialization of Table and Cards
 card = QuantumRegister(4, "card")
 table = QuantumRegister(2, "table")
 c_out = ClassicalRegister(4, "c_out")
-qc = QuantumCircuit(card, table, c_out) #Sample circuit
+qc = QuantumCircuit(card, table, c_out) 
 qc.h(card)
-qc.h(table[1])
+qc.h(table)
 
 #Controlled Gate with Table and Card
 control_table = int(input("Choose your control table bit (0-1): "))
@@ -111,12 +164,24 @@ if self_gate == "RY":
     theta_self = [0.0, 0.4, 0.8, 1.2][strength_level] 
 else:
     theta_self = None
-
 apply_self_gate(qc, card, self_gate, target_self, theta_self)
 
 counts = measure_qc_card_cout(qc)
 card = bit_to_card(counts)
+<<<<<<< HEAD
 print("Counts is:", counts)
 print("Your card is:", card)
+=======
+print("DEBUG card:", repr(card))
+print("DEBUG before total:", player_total, "ace_count:", ace_count)
+player_total, ace_count = add_card_to_total(card, player_total, ace_count)
+print("DEBUG after total:", player_total, "ace_count:", ace_count)
+if player_total > 21:
+    print("Bust! Your card total is", player_total
+          , "Counts is", counts, "You drew a", card)
+else:
+    print("Your player total is", player_total
+          , "Counts is", counts, "You drew a", card)
+>>>>>>> 93d6703447e020093e1f6eaa5b56a2273528159c
 
         
