@@ -23,10 +23,8 @@ def measure_qc_card_cout(qc):
     result = sim.run(t_qc, shots=1).result()
     counts = result.get_counts()
     return(counts)
-<<<<<<< HEAD
 
-=======
->>>>>>> 93d6703447e020093e1f6eaa5b56a2273528159c
+
 
 def qc_variables(n):
     global qc_0, qc_1, qc_2
@@ -61,31 +59,7 @@ def apply_self_gate(qc, card, self_gate, target_index, strength=None):
     else:
         print("Invalid gate. Try again")
 
-<<<<<<< HEAD
-def bit_to_card(counts):
-    bitstring = list(counts.keys())[0][::-1]  # Reverse the bitstring to match the order of qubits
-    card_mapping = {
-        '0000': 'Ace',
-        '0001': '2',
-        '0010': '3',
-        '0011': '4',
-        '0100': '5',
-        '0101': '6',
-        '0110': '7',
-        '0111': '8',
-        '1000': '9',
-        '1001': '10',
-        '1010': 'Jack',
-        '1011': 'Queen',
-        '1100': 'King',
-        '1101': 'Unknown',
-        '1110': 'Unknown',
-        '1111': 'Unknown'
-    }
 
-    card_value = card_mapping.get(bitstring, 'Unknown')
-    return card_value
-=======
 player_total = 0
 ace_count = 0
 def bit_to_card(counts):
@@ -133,7 +107,6 @@ def add_card_to_total(card, player_total, ace_count):
         ace_count -= 1
     return player_total, ace_count
     
->>>>>>> 93d6703447e020093e1f6eaa5b56a2273528159c
 
 #Initialization of Table and Cards
 card = QuantumRegister(4, "card")
@@ -168,10 +141,7 @@ apply_self_gate(qc, card, self_gate, target_self, theta_self)
 
 counts = measure_qc_card_cout(qc)
 card = bit_to_card(counts)
-<<<<<<< HEAD
-print("Counts is:", counts)
-print("Your card is:", card)
-=======
+
 print("DEBUG card:", repr(card))
 print("DEBUG before total:", player_total, "ace_count:", ace_count)
 player_total, ace_count = add_card_to_total(card, player_total, ace_count)
@@ -182,6 +152,6 @@ if player_total > 21:
 else:
     print("Your player total is", player_total
           , "Counts is", counts, "You drew a", card)
->>>>>>> 93d6703447e020093e1f6eaa5b56a2273528159c
+
 
         
