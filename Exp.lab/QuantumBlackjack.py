@@ -1,3 +1,4 @@
+from unittest import result
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.quantum_info import Statevector
 import numpy as np
@@ -19,9 +20,10 @@ def measure_qc_card_cout(qc):
     qc.measure(card, c_out)
     sim = AerSimulator()
     t_qc = transpile(qc, sim)
-    result = sim.run(t_qc).result()
+    result = sim.run(t_qc, shots=1).result()
     counts = result.get_counts()
-    print(counts)
+    return(counts)
+
 
 def qc_variables(n):
     global qc_0, qc_1, qc_2
@@ -56,6 +58,30 @@ def apply_self_gate(qc, card, self_gate, target_index, strength=None):
     else:
         print("Invalid gate. Try again")
 
+def bit_to_card(counts):
+    bitstring = list(counts.keys())[0][::-1]  # Reverse the bitstring to match the order of qubits
+    card_mapping = {
+        '0000': 'Ace',
+        '0001': '2',
+        '0010': '3',
+        '0011': '4',
+        '0100': '5',
+        '0101': '6',
+        '0110': '7',
+        '0111': '8',
+        '1000': '9',
+        '1001': '10',
+        '1010': 'Jack',
+        '1011': 'Queen',
+        '1100': 'King',
+        '1101': 'Unknown',
+        '1110': 'Unknown',
+        '1111': 'Unknown'
+    }
+
+    card_value = card_mapping.get(bitstring, 'Unknown')
+    return card_value
+
 #Initialization of Table and Cards
 card = QuantumRegister(4, "card")
 table = QuantumRegister(2, "table")
@@ -68,10 +94,13 @@ qc.h(table[1])
 control_table = int(input("Choose your control table bit (0-1): "))
 target_hand = int(input("Choose your target hand bit (0-3): "))
 table_card_gate = input("Choose the gate to apply between table and card (CRY, CX, CZ): ").strip().upper()
-mode = input("Mode (h = help, s = sabotage): ").lower()
-sign = +1 if mode == "h" else -1
-strength = int(input("Strength (1-3): "))
-theta_table = sign * [0.0, 0.4, 0.8, 1.2][strength]
+if table_card_gate == "CRY":
+    mode = input("Mode (h = help, s = sabotage): ").lower()
+    sign = +1 if mode == "h" else -1
+    strength = int(input("Strength (1-3): "))
+    theta_table = sign * [0.0, 0.4, 0.8, 1.2][strength]
+else:
+    theta_table = None
 apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
 
 #Self Gate on Card
@@ -85,7 +114,9 @@ else:
 
 apply_self_gate(qc, card, self_gate, target_self, theta_self)
 
-measure_qc_card_cout(qc)
-
+counts = measure_qc_card_cout(qc)
+card = bit_to_card(counts)
+print("Counts is:", counts)
+print("Your card is:", card)
 
         
