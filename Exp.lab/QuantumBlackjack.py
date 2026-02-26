@@ -24,8 +24,6 @@ def measure_qc_card_cout(qc):
     counts = result.get_counts()
     return(counts)
 
-
-
 def qc_variables(n):
     global qc_0, qc_1, qc_2
     if n == 1:
@@ -117,35 +115,40 @@ qc.h(card)
 qc.h(table)
 
 #Controlled Gate with Table and Card
-control_table = int(input("Choose your control table bit (0-1): "))
-target_hand = int(input("Choose your target hand bit (0-3): "))
-table_card_gate = input("Choose the gate to apply between table and card (CRY, CX, CZ): ").strip().upper()
-if table_card_gate == "CRY":
-    mode = input("Mode (h = help, s = sabotage): ").lower()
-    sign = +1 if mode == "h" else -1
-    strength = int(input("Strength (1-3): "))
-    theta_table = sign * [0.0, 0.4, 0.8, 1.2][strength]
+if input("Do you want to apply a gate between the table and card? (y/n): ").lower() == 'y':
+    control_table = int(input("Choose your control table bit (0-1): "))
+    target_hand = int(input("Choose your target hand bit (0-3): "))
+    table_card_gate = input("Choose the gate to apply between table and card (CRY, CX, CZ): ").strip().upper()
+    if table_card_gate == "CRY":
+        mode = input("Mode (h = help, s = sabotage): ").lower()
+        sign = +1 if mode == "h" else -1
+        strength = int(input("Strength (1-3): "))
+        theta_table = sign * [0.0, 0.4, 0.8, 1.2][strength]
+    else:
+        theta_table = None
+    apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
 else:
-    theta_table = None
-apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
+    print("No table-card gate applied")
 
 #Self Gate on Card
-self_gate = input("Choose the gate to apply to your own hand(H, Z, X, RY): ").strip().upper()
-target_self = int(input("Choose card qubit (0-3): "))
-if self_gate == "RY":
-    strength_level = int(input("Strength (1-3): "))
-    theta_self = [0.0, 0.4, 0.8, 1.2][strength_level] 
+if input("Do you want to apply a gate to your own hand? (y/n): ").lower() == 'y':
+    self_gate = input("Choose the gate to apply to your own hand(H, Z, X, RY): ").strip().upper()
+    target_self = int(input("Choose card qubit (0-3): "))
+    if self_gate == "RY":
+        strength_level = int(input("Strength (1-3): "))
+        theta_self = [0.0, 0.4, 0.8, 1.2][strength_level] 
+    else:
+        theta_self = None
+    apply_self_gate(qc, card, self_gate, target_self, theta_self)
 else:
-    theta_self = None
-apply_self_gate(qc, card, self_gate, target_self, theta_self)
+    print("No self gate applied")
 
 counts = measure_qc_card_cout(qc)
 card = bit_to_card(counts)
 
-print("DEBUG card:", repr(card))
-print("DEBUG before total:", player_total, "ace_count:", ace_count)
+
 player_total, ace_count = add_card_to_total(card, player_total, ace_count)
-print("DEBUG after total:", player_total, "ace_count:", ace_count)
+
 if player_total > 21:
     print("Bust! Your card total is", player_total
           , "Counts is", counts, "You drew a", card)
