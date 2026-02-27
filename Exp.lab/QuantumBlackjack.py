@@ -57,9 +57,6 @@ def apply_self_gate(qc, card, self_gate, target_index, strength=None):
     else:
         print("Invalid gate. Try again")
 
-
-player_total = 0
-ace_count = 0
 def bit_to_card(counts):
     bitstring = list(counts.keys())[0]
     card_mapping = {
@@ -82,6 +79,7 @@ def bit_to_card(counts):
     }
     card_value = card_mapping.get(bitstring, 'Unknown')
     return card_value
+
 def card_to_value(card):
     card = card.strip()
     if card in ['Jack', 'Queen', 'King']:
@@ -107,6 +105,9 @@ def add_card_to_total(card, player_total, ace_count):
     
 
 #Initialization of Table and Cards
+player_total = 0
+ace_count = 0
+standing = False
 card = QuantumRegister(4, "card")
 table = QuantumRegister(2, "table")
 c_out = ClassicalRegister(4, "c_out")
@@ -114,47 +115,54 @@ qc = QuantumCircuit(card, table, c_out)
 qc.h(card)
 qc.h(table)
 
-#Controlled Gate with Table and Card
-if input("Do you want to apply a gate between the table and card? (y/n): ").lower() == 'y':
-    control_table = int(input("Choose your control table bit (0-1): "))
-    target_hand = int(input("Choose your target hand bit (0-3): "))
-    table_card_gate = input("Choose the gate to apply between table and card (CRY, CX, CZ): ").strip().upper()
-    if table_card_gate == "CRY":
-        mode = input("Mode (h = help, s = sabotage): ").lower()
-        sign = +1 if mode == "h" else -1
-        strength = int(input("Strength (1-3): "))
-        theta_table = sign * [0.0, 0.4, 0.8, 1.2][strength]
+while (player_total <= 21) and (not standing):
+    action = input(
+    "Do you want to hit, apply a gate to your hand, apply a gate between table and card, use your ultimate, or stand? (hit/self/table/stand/ultimate): "
+).strip().lower()
+    if action == "hit":
+        counts = measure_qc_card_cout(qc)  # make sure this returns counts (shots=1 inside)
+        card_drawn = bit_to_card(counts)
+        player_total, ace_count = add_card_to_total(card_drawn, player_total, ace_count)
+
+    elif action == "self":
+        self_gate = input("Choose the gate to apply to your own hand(H, Z, X, RY): ").strip().upper()
+        target_self = int(input("Choose card qubit (0-3): "))
+        if self_gate == "RY":
+            strength_level = int(input("Strength (1-3): "))
+            theta_self = [0.0, 0.4, 0.8, 1.2][strength_level] 
+        else:
+            theta_self = None
+        apply_self_gate(qc, card, self_gate, target_self, theta_self)
+
+    elif action == "table":
+        control_table = int(input("Choose your control table bit (0-1): "))
+        target_hand = int(input("Choose your target hand bit (0-3): "))
+        table_card_gate = input("Choose the gate to apply between table and card (CRY, CX, CZ): ").strip().upper()
+        if table_card_gate == "CRY":
+            mode = input("Mode (h = help, s = sabotage): ").lower()
+            sign = +1 if mode == "h" else -1
+            strength = int(input("Strength (1-3): "))
+            theta_table = sign * [0.0, 0.4, 0.8, 1.2][strength]
+        else:
+            theta_table = None
+        apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
+
+    elif action == "ultimate":
+        qc.cx(table[0], card[0])
+        qc.cx(table[1], card[1])
+
+    elif action == "stand":
+        standing = True
+        print("Stand. No more actions taken.")
     else:
-        theta_table = None
-    apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
-else:
-    print("No table-card gate applied")
-
-#Self Gate on Card
-if input("Do you want to apply a gate to your own hand? (y/n): ").lower() == 'y':
-    self_gate = input("Choose the gate to apply to your own hand(H, Z, X, RY): ").strip().upper()
-    target_self = int(input("Choose card qubit (0-3): "))
-    if self_gate == "RY":
-        strength_level = int(input("Strength (1-3): "))
-        theta_self = [0.0, 0.4, 0.8, 1.2][strength_level] 
-    else:
-        theta_self = None
-    apply_self_gate(qc, card, self_gate, target_self, theta_self)
-else:
-    print("No self gate applied")
-
-counts = measure_qc_card_cout(qc)
-card = bit_to_card(counts)
-
-
-player_total, ace_count = add_card_to_total(card, player_total, ace_count)
+    # invalid
+        print("Invalid action. No draw.")
 
 if player_total > 21:
-    print("Bust! Your card total is", player_total
-          , "Counts is", counts, "You drew a", card)
+    print(f"Bust! Your card total is {player_total}, Counts is {counts}, You drew a {card}")
 else:
-    print("Your player total is", player_total
-          , "Counts is", counts, "You drew a", card)
+    print(f"Your player total is {player_total}, Counts is {counts}, You drew a {card}")
+
 
 
         
