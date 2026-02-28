@@ -102,7 +102,6 @@ def add_card_to_total(card, player_total, ace_count):
         player_total -= 10
         ace_count -= 1
     return player_total, ace_count
-    
 
 #Initialization of Table and Cards
 player_total = 0
@@ -115,6 +114,35 @@ qc = QuantumCircuit(card, table, c_out)
 qc.h(card)
 qc.h(table)
 
+def set_up(player_total, ace_count):
+    global qc
+    counts_0 = measure_qc_card_cout(qc)
+    card_drawn_0 = bit_to_card(counts_0)
+    player_total, ace_count = add_card_to_total(card_drawn_0, player_total, ace_count)
+    qc = QuantumCircuit(card, table, c_out)
+    qc.h(card)
+    qc.h(table)
+
+    counts_1 = measure_qc_card_cout(qc)
+    card_drawn_1 = bit_to_card(counts_1)
+    player_total, ace_count = add_card_to_total(card_drawn_1, player_total, ace_count)
+
+    print(f"You start with a {card_drawn_0} and a {card_drawn_1}, with a total of {player_total}.")
+    return player_total, ace_count
+
+#Initialization of Table and Cards
+player_total = 0
+ace_count = 0
+standing = False
+card = QuantumRegister(4, "card")
+table = QuantumRegister(2, "table")
+c_out = ClassicalRegister(4, "c_out")
+qc = QuantumCircuit(card, table, c_out) 
+qc.h(card)
+qc.h(table)
+player_total, ace_count = set_up(player_total, ace_count)
+
+
 while (player_total <= 21) and (not standing):
     action = input(
     "Do you want to hit, apply a gate to your hand, apply a gate between table and card, use your ultimate, or stand? (hit/self/table/stand/ultimate): "
@@ -123,6 +151,10 @@ while (player_total <= 21) and (not standing):
         counts = measure_qc_card_cout(qc)  # make sure this returns counts (shots=1 inside)
         card_drawn = bit_to_card(counts)
         player_total, ace_count = add_card_to_total(card_drawn, player_total, ace_count)
+        if player_total > 21:
+            print(f"Bust! Your card total is {player_total}, Counts is {counts}, You drew a {card_drawn}")
+        else:
+            print(f"Your player total is {player_total}, Counts is {counts}, You drew a {card_drawn}")
 
     elif action == "self":
         self_gate = input("Choose the gate to apply to your own hand(H, Z, X, RY): ").strip().upper()
@@ -133,6 +165,7 @@ while (player_total <= 21) and (not standing):
         else:
             theta_self = None
         apply_self_gate(qc, card, self_gate, target_self, theta_self)
+        print(f"Applied {self_gate} gate to card bit {target_self} with strength {theta_self if theta_self is not None else 'N/A'}")
 
     elif action == "table":
         control_table = int(input("Choose your control table bit (0-1): "))
@@ -146,22 +179,21 @@ while (player_total <= 21) and (not standing):
         else:
             theta_table = None
         apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
+        print(f"Applied {table_card_gate} gate between table bit {control_table} and card bit {target_hand} with strength {theta_table if theta_table is not None else 'N/A'}")
 
     elif action == "ultimate":
         qc.cx(table[0], card[0])
         qc.cx(table[1], card[1])
+        print("Used ultimate: CX gates between both table bits and the first two card bits.")
 
     elif action == "stand":
         standing = True
         print("Stand. No more actions taken.")
+
     else:
-    # invalid
+    #Invalid
         print("Invalid action. No draw.")
 
-if player_total > 21:
-    print(f"Bust! Your card total is {player_total}, Counts is {counts}, You drew a {card}")
-else:
-    print(f"Your player total is {player_total}, Counts is {counts}, You drew a {card}")
 
 
 
