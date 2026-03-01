@@ -103,10 +103,11 @@ def add_card_to_total(card, player_total, ace_count):
         ace_count -= 1
     return player_total, ace_count
 
-#Initialization of Table and Cards
+#TABLE AND CARDS FOR STARTING HAND
 player_total = 0
 ace_count = 0
 standing = False
+hand_cards = []
 card = QuantumRegister(4, "card")
 table = QuantumRegister(2, "table")
 c_out = ClassicalRegister(4, "c_out")
@@ -119,6 +120,7 @@ def set_up(player_total, ace_count):
     counts_0 = measure_qc_card_cout(qc)
     card_drawn_0 = bit_to_card(counts_0)
     player_total, ace_count = add_card_to_total(card_drawn_0, player_total, ace_count)
+
     qc = QuantumCircuit(card, table, c_out)
     qc.h(card)
     qc.h(table)
@@ -128,9 +130,9 @@ def set_up(player_total, ace_count):
     player_total, ace_count = add_card_to_total(card_drawn_1, player_total, ace_count)
 
     print(f"You start with a {card_drawn_0} and a {card_drawn_1}, with a total of {player_total}.")
-    return player_total, ace_count
+    return player_total, ace_count, card_drawn_0, card_drawn_1
 
-#Initialization of Table and Cards
+#INITIALIZATION OF TABLE AND CARDS FOR TURNS
 player_total = 0
 ace_count = 0
 standing = False
@@ -140,7 +142,8 @@ c_out = ClassicalRegister(4, "c_out")
 qc = QuantumCircuit(card, table, c_out) 
 qc.h(card)
 qc.h(table)
-player_total, ace_count = set_up(player_total, ace_count)
+player_total, ace_count, start0, start1 = set_up(player_total, ace_count)
+hand_cards.extend([start0, start1])
 
 
 while (player_total <= 21) and (not standing):
@@ -148,13 +151,15 @@ while (player_total <= 21) and (not standing):
     "Do you want to hit, apply a gate to your hand, apply a gate between table and card, use your ultimate, or stand? (hit/self/table/stand/ultimate): "
 ).strip().lower()
     if action == "hit":
-        counts = measure_qc_card_cout(qc)  # make sure this returns counts (shots=1 inside)
+        counts = measure_qc_card_cout(qc) 
         card_drawn = bit_to_card(counts)
+        hand_cards.append(card_drawn)
         player_total, ace_count = add_card_to_total(card_drawn, player_total, ace_count)
         if player_total > 21:
-            print(f"Bust! Your card total is {player_total}, Counts is {counts}, You drew a {card_drawn}")
+            print(f"Bust! Total: {player_total}, Counts: {counts}, Drew: {card_drawn}, Hand: {', '.join(hand_cards)}")
+            standing = True  # End game if bust
         else:
-            print(f"Your player total is {player_total}, Counts is {counts}, You drew a {card_drawn}")
+            print(f"Counts is {counts}, You drew a {card_drawn} Hand:", ",".join(hand_cards), "| Total:", player_total)
 
     elif action == "self":
         self_gate = input("Choose the gate to apply to your own hand(H, Z, X, RY): ").strip().upper()
@@ -193,6 +198,44 @@ while (player_total <= 21) and (not standing):
     else:
     #Invalid
         print("Invalid action. No draw.")
+
+
+#DEALER
+# DEALER
+if standing and player_total <= 21:
+
+    dealer_total = 0
+    dealer_ace_count = 0
+    dealer_hand = []
+
+    while dealer_total < 17:
+        # fresh circuit for each dealer draw
+        qc = QuantumCircuit(card, table, c_out)
+        qc.h(card)
+        qc.h(table)
+
+        counts_dealer = measure_qc_card_cout(qc)
+        card_drawn_dealer = bit_to_card(counts_dealer)
+
+        dealer_hand.append(card_drawn_dealer)
+        dealer_total, dealer_ace_count = add_card_to_total(
+            card_drawn_dealer,
+            dealer_total,
+            dealer_ace_count
+        )
+
+        print(f"Dealer drew a {card_drawn_dealer}. Dealer total: {dealer_total}")
+
+    print("Dealer hand:", ", ".join(dealer_hand), "| Total:", dealer_total)
+
+    if dealer_total > 21:
+        print("Dealer busts! You win!")
+    elif dealer_total > player_total:
+        print("Dealer wins with a total of", dealer_total)
+    elif dealer_total < player_total:
+        print("You win with a total of", player_total)
+    else:
+        print("It's a tie with both at", player_total)
 
 
 
