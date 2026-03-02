@@ -108,6 +108,7 @@ player_total = 0
 ace_count = 0
 standing = False
 hand_cards = []
+table_modifiers = []
 card = QuantumRegister(4, "card")
 table = QuantumRegister(2, "table")
 c_out = ClassicalRegister(4, "c_out")
@@ -151,6 +152,11 @@ while (player_total <= 21) and (not standing):
     "Do you want to hit, apply a gate to your hand, apply a gate between table and card, use your ultimate, or stand? (hit/self/table/stand/ultimate): "
 ).strip().lower()
     if action == "hit":
+        qc = QuantumCircuit(card, table, c_out)
+        qc.h(card)
+        qc.h(table)
+        for control_table, target_hand, table_card_gate, theta_table in table_modifiers:
+            apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
         counts = measure_qc_card_cout(qc) 
         card_drawn = bit_to_card(counts)
         hand_cards.append(card_drawn)
@@ -160,6 +166,7 @@ while (player_total <= 21) and (not standing):
             standing = True  # End game if bust
         else:
             print(f"Counts is {counts}, You drew a {card_drawn} Hand:", ",".join(hand_cards), "| Total:", player_total)
+        table_modifiers.clear()
 
     elif action == "self":
         self_gate = input("Choose the gate to apply to your own hand(H, Z, X, RY): ").strip().upper()
@@ -183,8 +190,9 @@ while (player_total <= 21) and (not standing):
             theta_table = sign * [0.0, 0.4, 0.8, 1.2][strength]
         else:
             theta_table = None
-        apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
-        print(f"Applied {table_card_gate} gate between table bit {control_table} and card bit {target_hand} with strength {theta_table if theta_table is not None else 'N/A'}")
+        table_modifiers.append((control_table, target_hand, table_card_gate, theta_table))
+        print(f"Table modifier saved. It will affect the next hit.")
+        
 
     elif action == "ultimate":
         qc.cx(table[0], card[0])
@@ -203,17 +211,16 @@ while (player_total <= 21) and (not standing):
 #DEALER
 # DEALER
 if standing and player_total <= 21:
-
     dealer_total = 0
     dealer_ace_count = 0
     dealer_hand = []
 
     while dealer_total < 17:
-        # fresh circuit for each dealer draw
+        #New dealer circuit
         qc = QuantumCircuit(card, table, c_out)
         qc.h(card)
         qc.h(table)
-
+        table_modifiers.clear()
         counts_dealer = measure_qc_card_cout(qc)
         card_drawn_dealer = bit_to_card(counts_dealer)
 
@@ -241,3 +248,4 @@ if standing and player_total <= 21:
 
 
         
+
