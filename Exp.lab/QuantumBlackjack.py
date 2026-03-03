@@ -109,6 +109,7 @@ ace_count = 0
 standing = False
 hand_cards = []
 table_modifiers = []
+self_modifiers = []
 card = QuantumRegister(4, "card")
 table = QuantumRegister(2, "table")
 c_out = ClassicalRegister(4, "c_out")
@@ -133,16 +134,6 @@ def set_up(player_total, ace_count):
     print(f"You start with a {card_drawn_0} and a {card_drawn_1}, with a total of {player_total}.")
     return player_total, ace_count, card_drawn_0, card_drawn_1
 
-#INITIALIZATION OF TABLE AND CARDS FOR TURNS
-player_total = 0
-ace_count = 0
-standing = False
-card = QuantumRegister(4, "card")
-table = QuantumRegister(2, "table")
-c_out = ClassicalRegister(4, "c_out")
-qc = QuantumCircuit(card, table, c_out) 
-qc.h(card)
-qc.h(table)
 player_total, ace_count, start0, start1 = set_up(player_total, ace_count)
 hand_cards.extend([start0, start1])
 
@@ -157,6 +148,8 @@ while (player_total <= 21) and (not standing):
         qc.h(table)
         for control_table, target_hand, table_card_gate, theta_table in table_modifiers:
             apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
+        for self_gate, target_self, theta_self in self_modifiers:
+            apply_self_gate(qc, card, self_gate, target_self, theta_self)
         counts = measure_qc_card_cout(qc) 
         card_drawn = bit_to_card(counts)
         hand_cards.append(card_drawn)
@@ -167,6 +160,7 @@ while (player_total <= 21) and (not standing):
         else:
             print(f"Counts is {counts}, You drew a {card_drawn} Hand:", ",".join(hand_cards), "| Total:", player_total)
         table_modifiers.clear()
+        self_modifiers.clear()
 
     elif action == "self":
         self_gate = input("Choose the gate to apply to your own hand(H, Z, X, RY): ").strip().upper()
@@ -176,8 +170,9 @@ while (player_total <= 21) and (not standing):
             theta_self = [0.0, 0.4, 0.8, 1.2][strength_level] 
         else:
             theta_self = None
-        apply_self_gate(qc, card, self_gate, target_self, theta_self)
+        self_modifiers.append((self_gate, target_self, theta_self))
         print(f"Applied {self_gate} gate to card bit {target_self} with strength {theta_self if theta_self is not None else 'N/A'}")
+        print("Self modifier saved. It will affect the next hit.")
 
     elif action == "table":
         control_table = int(input("Choose your control table bit (0-1): "))
@@ -195,9 +190,9 @@ while (player_total <= 21) and (not standing):
         
 
     elif action == "ultimate":
-        qc.cx(table[0], card[0])
-        qc.cx(table[1], card[1])
-        print("Used ultimate: CX gates between both table bits and the first two card bits.")
+        table_modifiers.append((0, 0, "CX", None))
+        table_modifiers.append((1, 1, "CX", None))
+        print("Used ultimate: will apply CX gates between table bits and their corresponding card bits on the next hit.")
 
     elif action == "stand":
         standing = True
@@ -209,7 +204,6 @@ while (player_total <= 21) and (not standing):
 
 
 #DEALER
-# DEALER
 if standing and player_total <= 21:
     dealer_total = 0
     dealer_ace_count = 0
