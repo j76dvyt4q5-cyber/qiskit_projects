@@ -1,4 +1,5 @@
 from unittest import result
+import random
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.quantum_info import Statevector
 import numpy as np
@@ -16,7 +17,7 @@ def measure_qc_1024():
     counts = result.get_counts()
     print(counts)
 
-def measure_qc_card_cout(qc):
+def measure_qc_card_cout(qc, card, c_out):
     qc.measure(card, c_out)
     sim = AerSimulator()
     t_qc = transpile(qc, sim)
@@ -57,28 +58,38 @@ def apply_self_gate(qc, card, self_gate, target_index, strength=None):
     else:
         print("Invalid gate. Try again")
 
-def bit_to_card(counts):
+def quantum_index(card, table, c_out, table_mods=None, self_mods=None):
+    qc = QuantumCircuit(card, table, c_out)
+    qc.h(card)
+    qc.h(table)
+    if table_mods:
+        for control_table, target_hand, table_card_gate, theta_table in table_mods:
+            apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
+    if self_mods:
+        for self_gate, target_self, theta_self in self_mods:
+            apply_self_gate(qc, card, self_gate, target_self, theta_self)
+    counts = measure_qc_card_cout(qc, card, c_out)
     bitstring = list(counts.keys())[0]
-    card_mapping = {
-        '0000': 'Unknown',
-        '0001': 'Ace',
-        '0010': '2',
-        '0011': '3',
-        '0100': '4',
-        '0101': '5',
-        '0110': '6',
-        '0111': '7',
-        '1000': '8',
-        '1001': '9',
-        '1010': '10',
-        '1011': 'Jack',
-        '1100': 'Queen',
-        '1101': 'King',
-        '1110': 'Ace',
-        '1111': 'Unknown'
-    }
-    card_value = card_mapping.get(bitstring, 'Unknown')
-    return card_value
+    return int(bitstring, 2)
+
+def fresh_deck():
+    faces = ['Ace','2','3','4','5','6','7','8','9','10','Jack','Queen','King']
+    deck = faces * 4
+    random.shuffle(deck)
+    return deck
+
+def draw_card(deck, card, table, c_out, table_mods=None, self_mods=None):
+    if not deck:
+        deck.extend(fresh_deck())
+        print(" [Deck reshuffled]")
+    while True:
+        idx = quantum_index(card, table, c_out, table_mods, self_mods)
+        if idx < len(deck):
+            drawn = deck[idx]
+            deck.pop(idx)
+            return drawn
+        table_mods = None
+        self_mods = None
 
 def card_to_value(card):
     card = card.strip()
@@ -104,6 +115,7 @@ def add_card_to_total(card, player_total, ace_count):
     return player_total, ace_count
 
 #TABLE AND CARDS FOR STARTING HAND
+deck = fresh_deck()
 player_total = 0
 ace_count = 0
 standing = False
@@ -118,17 +130,10 @@ qc.h(card)
 qc.h(table)
 
 def set_up(player_total, ace_count):
-    global qc
-    counts_0 = measure_qc_card_cout(qc)
-    card_drawn_0 = bit_to_card(counts_0)
+    card_drawn_0 = draw_card(deck, card, table, c_out)
     player_total, ace_count = add_card_to_total(card_drawn_0, player_total, ace_count)
 
-    qc = QuantumCircuit(card, table, c_out)
-    qc.h(card)
-    qc.h(table)
-
-    counts_1 = measure_qc_card_cout(qc)
-    card_drawn_1 = bit_to_card(counts_1)
+    card_drawn_1 = draw_card(deck, card, table, c_out)
     player_total, ace_count = add_card_to_total(card_drawn_1, player_total, ace_count)
 
     print(f"You start with a {card_drawn_0} and a {card_drawn_1}, with a total of {player_total}.")
@@ -143,22 +148,14 @@ while (player_total <= 21) and (not standing):
     "Do you want to hit, apply a gate to your hand, apply a gate between table and card, use your ultimate, or stand? (hit/self/table/stand/ultimate): "
 ).strip().lower()
     if action == "hit":
-        qc = QuantumCircuit(card, table, c_out)
-        qc.h(card)
-        qc.h(table)
-        for control_table, target_hand, table_card_gate, theta_table in table_modifiers:
-            apply_table_gate(qc, control_table, table, card, target_hand, theta_table, table_card_gate)
-        for self_gate, target_self, theta_self in self_modifiers:
-            apply_self_gate(qc, card, self_gate, target_self, theta_self)
-        counts = measure_qc_card_cout(qc) 
-        card_drawn = bit_to_card(counts)
+        card_drawn = draw_card(deck, card, table, c_out, table_modifiers, self_modifiers)
         hand_cards.append(card_drawn)
         player_total, ace_count = add_card_to_total(card_drawn, player_total, ace_count)
         if player_total > 21:
-            print(f"Bust! Total: {player_total}, Counts: {counts}, Drew: {card_drawn}, Hand: {', '.join(hand_cards)}")
-            standing = True  # End game if bust
+            print(f"Bust! Total: {player_total}, Drew: {card_drawn}, Hand: {', '.join(hand_cards)}")
+            standing = True
         else:
-            print(f"Counts is {counts}, You drew a {card_drawn} Hand:", ",".join(hand_cards), "| Total:", player_total)
+            print(f"You drew a {card_drawn}. Hand: {', '.join(hand_cards)} | Total: {player_total}")
         table_modifiers.clear()
         self_modifiers.clear()
 
@@ -215,8 +212,8 @@ if standing and player_total <= 21:
         qc.h(card)
         qc.h(table)
         table_modifiers.clear()
-        counts_dealer = measure_qc_card_cout(qc)
-        card_drawn_dealer = bit_to_card(counts_dealer)
+        counts_dealer = measure_qc_card_cout(qc, card, c_out)
+        card_drawn_dealer = draw_card(deck, card, table, c_out)
 
         dealer_hand.append(card_drawn_dealer)
         dealer_total, dealer_ace_count = add_card_to_total(
