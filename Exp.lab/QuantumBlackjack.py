@@ -145,8 +145,7 @@ hand_cards.extend([start0, start1])
 
 while (player_total <= 21) and (not standing):
     action = input(
-    "Do you want to hit, apply a gate to your hand, apply a gate between table and card, use your ultimate, or stand? (hit/self/table/stand/ultimate): "
-).strip().lower()
+    "Do you want to hit, apply a gate to your hand, apply a gate between table and card, use your ultimate, or stand? (hit/self/table/stand/ultimate): ").strip().lower()
     if action == "hit":
         card_drawn = draw_card(deck, card, table, c_out, table_modifiers, self_modifiers)
         hand_cards.append(card_drawn)
