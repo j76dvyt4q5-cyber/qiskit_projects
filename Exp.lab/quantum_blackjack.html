@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Blackjack</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --felt: #0a1f0e;
+  --felt-mid: #0f2a14;
+  --felt-light: #163520;
+  --felt-table: #0c2410;
+  --gold: #c9a84c;
+  --gold-light: #e8c97a;
+  --gold-dim: rgba(201,168,76,0.12);
+  --gold-border: rgba(201,168,76,0.25);
+  --ivory: #f0e6cc;
+  --ivory-dim: rgba(240,230,204,0.65);
+  --ivory-muted: rgba(240,230,204,0.32);
+  --red: #c0392b;
+  --red-card: #9b1c1c;
+  --cyan: #5bc8d4;
+  --cyan-dim: rgba(91,200,212,0.12);
+  --sage: #7ab87a;
+  --panel: rgba(255,255,255,0.025);
+  --border: rgba(240,230,204,0.08);
+  --purple: #b06fff;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--felt);
+  color: var(--ivory);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse at 15% 40%, rgba(201,168,76,0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 15%, rgba(91,200,212,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 90%, rgba(122,184,122,0.03) 0%, transparent 50%);
+  pointer-events: none; z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Crect width='6' height='6' fill='%230a1f0e'/%3E%3Ccircle cx='1.5' cy='1.5' r='0.7' fill='%230c2210' opacity='0.6'/%3E%3Ccircle cx='4.5' cy='4.5' r='0.7' fill='%230c2210' opacity='0.6'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0; opacity: 0.7;
+}
+
+.suit-corner { position: fixed; font-size: 130px; line-height: 1; pointer-events: none; z-index: 0; opacity: 0.025; font-family: serif; }
+.suit-tl { top:-20px; left:-10px; color:var(--ivory); }
+.suit-tr { top:-20px; right:-10px; color:var(--red); transform:scaleX(-1); }
+.suit-bl { bottom:-20px; left:-10px; color:var(--red); }
+.suit-br { bottom:-20px; right:-10px; color:var(--ivory); transform:scaleX(-1); }
+
+.page { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 48px 32px 80px; }
+
+/* ── HEADER ── */
+header { margin-bottom: 40px; animation: riseIn .8s cubic-bezier(.22,1,.36,1) both; }
+.pre-title { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.suit-row { display: flex; gap: 8px; }
+.suit-row span { color: var(--gold); font-family: serif; font-size: 20px; opacity: 0.55; }
+.eyebrow { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 4px; color: var(--gold); text-transform: uppercase; opacity: 0.55; }
+h1 { font-family: 'Playfair Display', serif; font-size: clamp(36px, 5vw, 60px); font-weight: 900; line-height: 1; letter-spacing: -1px; }
+h1 em { font-style: italic; font-weight: 400; color: var(--ivory-dim); }
+h1 strong { background: linear-gradient(130deg, var(--gold-light) 0%, var(--gold) 45%, #9a7218 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.header-rule { width: 100%; height: 1px; background: linear-gradient(90deg, var(--gold), transparent 70%); margin: 18px 0 14px; opacity: .3; }
+.subtitle { font-size: 13px; font-weight: 300; color: var(--ivory-dim); line-height: 1.8; }
+.subtitle b { color: var(--gold-light); font-weight: 500; }
+
+/* ── GAME TABLE ── */
+.game-table {
+  background: var(--felt-table);
+  border: 2px solid var(--gold-border);
+  border-radius: 100px;
+  padding: 36px 52px;
+  margin-bottom: 24px;
+  min-height: 300px;
+  position: relative;
+  box-shadow: inset 0 4px 50px rgba(0,0,0,0.5), 0 0 60px rgba(0,0,0,0.3);
+  animation: riseIn .7s .1s cubic-bezier(.22,1,.36,1) both;
+}
+.game-table::before {
+  content: '';
+  position: absolute; inset: 10px;
+  border: 1px solid rgba(201,168,76,0.08);
+  border-radius: 94px;
+  pointer-events: none;
+}
+
+.table-section { margin-bottom: 24px; }
+.table-section:last-child { margin-bottom: 0; }
+
+.table-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--ivory-muted);
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 10px;
+}
+.table-label .score {
+  font-size: 11px; color: var(--gold); opacity: .8;
+  padding: 1px 8px;
+  border: 1px solid var(--gold-border);
+  border-radius: 2px;
+}
+
+.cards-row {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  min-height: 98px; align-items: center;
+}
+
+.table-mid {
+  width: 100%; height: 1px;
+  background: rgba(201,168,76,0.08);
+  margin: 4px 0 20px;
+}
+
+/* ── PLAYING CARDS ── */
+.playing-card {
+  width: 68px; height: 98px;
+  background: var(--ivory);
+  border: 1px solid rgba(201,168,76,0.3);
+  border-radius: 7px;
+  padding: 6px 7px;
+  position: relative;
+  box-shadow: 2px 4px 14px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.4);
+  display: flex; flex-direction: column;
+  color: #1a1208;
+  font-family: 'Playfair Display', serif;
+  flex-shrink: 0;
+  animation: cardDeal 0.35s cubic-bezier(.22,1,.36,1) both;
+}
+.playing-card.red-card { color: var(--red-card); }
+
+.card-corner { display: flex; flex-direction: column; line-height: 1; }
+.card-val  { font-size: 14px; font-weight: 700; }
+.card-suit-sm { font-size: 11px; }
+.card-center {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 28px; opacity: 0.6;
+}
+.card-corner-br {
+  position: absolute; bottom: 5px; right: 6px;
+  display: flex; flex-direction: column; align-items: flex-end;
+  line-height: 1; transform: rotate(180deg);
+}
+
+.playing-card.card-back {
+  background:
+    repeating-linear-gradient(45deg, #0d2612 0px, #0d2612 4px, #112e16 4px, #112e16 8px);
+  border-color: var(--gold-border);
+}
+.playing-card.card-back::after {
+  content: '♦';
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--gold); font-size: 26px; opacity: 0.35;
+}
+
+.card-placeholder {
+  width: 68px; height: 98px;
+  border: 1px dashed rgba(240,230,204,0.1);
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+
+/* ── STATUS MESSAGES ── */
+.message-area {
+  min-height: 44px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+.msg {
+  font-family: 'Playfair Display', serif;
+  font-size: 13px; font-style: italic;
+  color: var(--ivory-dim);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ── RESULT BANNER ── */
+.result-banner {
+  display: none;
+  text-align: center;
+  padding: 22px 28px;
+  margin-bottom: 24px;
+  border-radius: 4px;
+  border: 1px solid;
+  animation: riseIn .4s both;
+}
+.result-banner.show { display: block; }
+.result-banner.win  { border-color: rgba(122,184,122,0.4); background: rgba(122,184,122,0.07); }
+.result-banner.lose { border-color: rgba(192,57,43,0.3);  background: rgba(192,57,43,0.06); }
+.result-banner.tie  { border-color: var(--gold-border);   background: var(--gold-dim); }
+.result-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px; font-weight: 900;
+  margin-bottom: 4px;
+}
+.result-banner.win  .result-title { color: var(--sage); }
+.result-banner.lose .result-title { color: #e07060; }
+.result-banner.tie  .result-title { color: var(--gold); }
+.result-sub { font-size: 12px; color: var(--ivory-muted); font-family: 'DM Mono', monospace; letter-spacing: 1px; }
+
+/* ── ACTION BUTTONS ── */
+.actions { animation: riseIn .6s .2s cubic-bezier(.22,1,.36,1) both; }
+.action-row {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  padding: 11px 22px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--ivory-dim);
+  cursor: pointer;
+  transition: border-color .18s, color .18s, background .18s, opacity .18s;
+}
+.btn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+.btn:disabled { opacity: 0.28; cursor: not-allowed; }
+
+.btn.primary { border-color: var(--gold-border); color: var(--gold); background: var(--gold-dim); }
+.btn.primary:hover:not(:disabled) { background: rgba(201,168,76,0.22); border-color: var(--gold); }
+
+.btn.hit-btn { border-color: rgba(122,184,122,0.3); color: var(--sage); }
+.btn.hit-btn:hover:not(:disabled) { border-color: var(--sage); background: rgba(122,184,122,0.1); }
+
+.btn.stand-btn { border-color: rgba(192,57,43,0.3); color: #e07060; }
+.btn.stand-btn:hover:not(:disabled) { border-color: var(--red); background: rgba(192,57,43,0.08); }
+
+.btn.gate-btn { border-color: rgba(91,200,212,0.3); color: var(--cyan); }
+.btn.gate-btn:hover:not(:disabled), .btn.gate-btn.active { border-color: var(--cyan); background: var(--cyan-dim); }
+
+.btn.ult-btn { border-color: rgba(176,111,255,0.3); color: var(--purple); }
+.btn.ult-btn:hover:not(:disabled) { border-color: var(--purple); background: rgba(176,111,255,0.1); }
+.btn.ult-btn:disabled.used { opacity: 0.22; }
+
+/* ── GATE PANEL ── */
+.gate-panel {
+  display: none;
+  background: var(--panel);
+  border: 1px solid rgba(91,200,212,0.2);
+  border-radius: 4px;
+  padding: 20px 24px;
+  margin-bottom: 12px;
+  animation: riseIn .25s both;
+}
+.gate-panel.show { display: block; }
+
+.gp-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 13px; font-weight: 700;
+  color: var(--cyan);
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.gp-close {
+  margin-left: auto;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; color: var(--ivory-muted);
+  cursor: pointer; border: none; background: none;
+  letter-spacing: 1px;
+}
+.gp-close:hover { color: var(--ivory); }
+
+.gp-row { display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
+.gp-field { display: flex; flex-direction: column; gap: 7px; }
+.gp-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--ivory-muted);
+}
+.gp-opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.gp-opt {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; letter-spacing: 1px;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ivory-muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.gp-opt:hover { border-color: var(--cyan); color: var(--cyan); }
+.gp-opt.sel { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
+
+.gp-sub { display: none; margin-top: 14px; }
+.gp-sub.show { display: flex; gap: 24px; flex-wrap: wrap; }
+
+.gp-queue {
+  margin-top: 16px;
+  display: flex; justify-content: flex-end;
+}
+
+/* ── PENDING MODIFIERS ── */
+.modifiers-bar {
+  min-height: 32px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 16px;
+  animation: riseIn .5s .3s both;
+}
+.mod-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--ivory-muted);
+}
+.mod-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+  padding: 3px 9px;
+  border: 1px solid var(--cyan);
+  border-radius: 2px;
+  color: var(--cyan);
+  background: var(--cyan-dim);
+}
+
+/* ── DECK COUNTER ── */
+.deck-info {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; letter-spacing: 2px;
+  color: var(--ivory-muted);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ── START SCREEN ── */
+.start-screen {
+  text-align: center;
+  padding: 60px 0;
+}
+.start-screen p {
+  font-size: 13px; color: var(--ivory-dim);
+  margin-bottom: 28px; font-style: italic;
+  font-family: 'Playfair Display', serif;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes riseIn    { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes cardDeal  { from{opacity:0;transform:translateY(-20px) rotate(-3deg)} to{opacity:1;transform:translateY(0) rotate(0)} }
+@keyframes glow      { 0%,100%{opacity:1;box-shadow:0 0 9px #4caf50} 50%{opacity:.45;box-shadow:0 0 4px #4caf50} }
+</style>
+</head>
+<body>
+
+<div class="suit-corner suit-tl">♠</div>
+<div class="suit-corner suit-tr">♥</div>
+<div class="suit-corner suit-bl">♦</div>
+<div class="suit-corner suit-br">♣</div>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <header>
+    <div class="pre-title">
+      <div class="suit-row"><span>♠</span><span>♥</span><span>♦</span><span>♣</span></div>
+      <span class="eyebrow">Powered by Qiskit · AerSimulator</span>
+    </div>
+    <h1><em>Quantum</em> <strong>Blackjack</strong></h1>
+    <div class="header-rule"></div>
+    <p class="subtitle">Every card collapses from <b>quantum superposition</b>. Apply real gate operations to bias your draw before measurement.</p>
+  </header>
+
+  <!-- RESULT BANNER -->
+  <div class="result-banner" id="resultBanner">
+    <div class="result-title" id="resultTitle"></div>
+    <div class="result-sub" id="resultSub"></div>
+  </div>
+
+  <!-- GAME TABLE -->
+  <div class="game-table" id="gameTable">
+    <div id="startScreen" class="start-screen">
+      <p>The deck is shuffled. The circuit is ready.</p>
+      <button class="btn primary" onclick="newGame()" style="font-size:12px;padding:13px 32px;letter-spacing:3px;">
+        Deal Cards
+      </button>
+    </div>
+
+    <div id="gameArea" style="display:none">
+      <!-- Dealer -->
+      <div class="table-section">
+        <div class="table-label">
+          Dealer
+          <span class="score" id="dealerScore" style="display:none"></span>
+        </div>
+        <div class="cards-row" id="dealerCards">
+          <div class="card-placeholder"></div>
+          <div class="card-placeholder"></div>
+        </div>
+      </div>
+
+      <div class="table-mid"></div>
+
+      <!-- Messages -->
+      <div class="message-area" id="messageArea"></div>
+
+      <!-- Player -->
+      <div class="table-section">
+        <div class="table-label">
+          Your Hand
+          <span class="score" id="playerScore"></span>
+        </div>
+        <div class="cards-row" id="playerCards"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="actions" id="actions" style="display:none">
+
+    <!-- Pending modifiers -->
+    <div class="modifiers-bar" id="modifiersBar">
+      <span class="mod-label">Queued</span>
+      <span id="modTags" style="display:flex;gap:6px;flex-wrap:wrap;"></span>
+    </div>
+
+    <!-- Gate panel: self -->
+    <div class="gate-panel" id="selfPanel">
+      <div class="gp-title">
+        Self Gate — card register
+        <button class="gp-close" onclick="closePanel('selfPanel')">close ×</button>
+      </div>
+      <div class="gp-row">
+        <div class="gp-field">
+          <span class="gp-label">Gate</span>
+          <div class="gp-opts" id="selfGateOpts">
+            <button class="gp-opt" onclick="selectOpt(this,'selfGate','H')">H</button>
+            <button class="gp-opt" onclick="selectOpt(this,'selfGate','Z')">Z</button>
+            <button class="gp-opt" onclick="selectOpt(this,'selfGate','X')">X</button>
+            <button class="gp-opt" onclick="selectOpt(this,'selfGate','RY')">RY</button>
+          </div>
+        </div>
+        <div class="gp-field">
+          <span class="gp-label">Card Qubit</span>
+          <div class="gp-opts">
+            <button class="gp-opt" onclick="selectOpt(this,'selfQubit',0)">0</button>
+            <button class="gp-opt" onclick="selectOpt(this,'selfQubit',1)">1</button>
+            <button class="gp-opt" onclick="selectOpt(this,'selfQubit',2)">2</button>
+            <button class="gp-opt" onclick="selectOpt(this,'selfQubit',3)">3</button>
+          </div>
+        </div>
+      </div>
+      <div class="gp-sub" id="ryStrengthRow">
+        <div class="gp-field">
+          <span class="gp-label">RY Strength</span>
+          <div class="gp-opts">
+            <button class="gp-opt" onclick="selectOpt(this,'selfStrength',1)">1</button>
+            <button class="gp-opt" onclick="selectOpt(this,'selfStrength',2)">2</button>
+            <button class="gp-opt" onclick="selectOpt(this,'selfStrength',3)">3</button>
+          </div>
+        </div>
+      </div>
+      <div class="gp-queue">
+        <button class="btn gate-btn" onclick="queueSelfGate()">Queue Gate →</button>
+      </div>
+    </div>
+
+    <!-- Gate panel: table -->
+    <div class="gate-panel" id="tablePanel">
+      <div class="gp-title">
+        Table Gate — table → card entanglement
+        <button class="gp-close" onclick="closePanel('tablePanel')">close ×</button>
+      </div>
+      <div class="gp-row">
+        <div class="gp-field">
+          <span class="gp-label">Control (table)</span>
+          <div class="gp-opts">
+            <button class="gp-opt" onclick="selectOpt(this,'tableControl',0)">0</button>
+            <button class="gp-opt" onclick="selectOpt(this,'tableControl',1)">1</button>
+          </div>
+        </div>
+        <div class="gp-field">
+          <span class="gp-label">Target (card)</span>
+          <div class="gp-opts">
+            <button class="gp-opt" onclick="selectOpt(this,'tableTarget',0)">0</button>
+            <button class="gp-opt" onclick="selectOpt(this,'tableTarget',1)">1</button>
+            <button class="gp-opt" onclick="selectOpt(this,'tableTarget',2)">2</button>
+            <button class="gp-opt" onclick="selectOpt(this,'tableTarget',3)">3</button>
+          </div>
+        </div>
+        <div class="gp-field">
+          <span class="gp-label">Gate</span>
+          <div class="gp-opts">
+            <button class="gp-opt" onclick="selectOpt(this,'tableGate','CRY')">CRY</button>
+            <button class="gp-opt" onclick="selectOpt(this,'tableGate','CX')">CX</button>
+            <button class="gp-opt" onclick="selectOpt(this,'tableGate','CZ')">CZ</button>
+          </div>
+        </div>
+      </div>
+      <div class="gp-sub" id="cryRow">
+        <div class="gp-field">
+          <span class="gp-label">Mode</span>
+          <div class="gp-opts">
+            <button class="gp-opt" onclick="selectOpt(this,'cryMode','h')">Help</button>
+            <button class="gp-opt" onclick="selectOpt(this,'cryMode','s')">Sabotage</button>
+          </div>
+        </div>
+        <div class="gp-field">
+          <span class="gp-label">Strength</span>
+          <div class="gp-opts">
+            <button class="gp-opt" onclick="selectOpt(this,'cryStrength',1)">1</button>
+            <button class="gp-opt" onclick="selectOpt(this,'cryStrength',2)">2</button>
+            <button class="gp-opt" onclick="selectOpt(this,'cryStrength',3)">3</button>
+          </div>
+        </div>
+      </div>
+      <div class="gp-queue">
+        <button class="btn gate-btn" onclick="queueTableGate()">Queue Gate →</button>
+      </div>
+    </div>
+
+    <!-- Main action buttons -->
+    <div class="action-row" id="mainActions">
+      <button class="btn hit-btn"   id="hitBtn"   onclick="doAction('hit')">Hit</button>
+      <button class="btn stand-btn" id="standBtn" onclick="doAction('stand')">Stand</button>
+      <button class="btn gate-btn"  id="selfBtn"  onclick="togglePanel('selfPanel','selfBtn')">Self Gate</button>
+      <button class="btn gate-btn"  id="tableBtn" onclick="togglePanel('tablePanel','tableBtn')">Table Gate</button>
+      <button class="btn ult-btn"   id="ultBtn"   onclick="doAction('ultimate')">Ultimate</button>
+    </div>
+
+    <!-- New game / deck info -->
+    <div class="action-row">
+      <button class="btn primary" id="newGameBtn" onclick="newGame()" style="display:none">New Round</button>
+    </div>
+    <div class="deck-info" id="deckInfo"></div>
+  </div>
+
+</div>
+
+<script>
+const API = 'http://localhost:5000/api';
+
+// Selections state
+const sel = {
+  selfGate: null, selfQubit: null, selfStrength: null,
+  tableControl: null, tableTarget: null, tableGate: null,
+  cryMode: null, cryStrength: null
+};
+
+// Card display helpers
+const SUITS     = ['♠','♥','♦','♣'];
+const RED_SUITS = ['♥','♦'];
+
+function cardSuit(name, idx) {
+  const order = ['Ace','2','3','4','5','6','7','8','9','10','Jack','Queen','King'];
+  const fi = order.indexOf(name);
+  return SUITS[(fi >= 0 ? fi : idx) % 4];
+}
+
+function makeCard(name, faceDown = false) {
+  const el = document.createElement('div');
+  el.className = 'playing-card';
+  if (faceDown) { el.classList.add('card-back'); return el; }
+
+  const suit  = cardSuit(name, Math.floor(Math.random() * 4));
+  const isRed = RED_SUITS.includes(suit);
+  if (isRed) el.classList.add('red-card');
+
+  el.innerHTML = `
+    <div class="card-corner">
+      <div class="card-val">${name === '10' ? '10' : name[0]}</div>
+      <div class="card-suit-sm">${suit}</div>
+    </div>
+    <div class="card-center">${suit}</div>
+    <div class="card-corner-br">
+      <div class="card-val">${name === '10' ? '10' : name[0]}</div>
+      <div class="card-suit-sm">${suit}</div>
+    </div>`;
+  return el;
+}
+
+function renderCards(hand, containerId, dealerPhase) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  hand.forEach((card, i) => {
+    // Show dealer's first card face-down until game ends
+    const faceDown = (containerId === 'dealerCards' && dealerPhase === 'playing' && i === 0);
+    el.appendChild(makeCard(card, faceDown));
+  });
+}
+
+function setMessages(messages) {
+  const el = document.getElementById('messageArea');
+  el.innerHTML = messages.map(m => `<div class="msg">${m}</div>`).join('');
+}
+
+function updateUI(data) {
+  // Show game area
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('gameArea').style.display = 'block';
+  document.getElementById('actions').style.display = 'block';
+
+  // Cards
+  renderCards(data.player_hand, 'playerCards', data.phase);
+  renderCards(data.dealer_hand, 'dealerCards', data.phase);
+
+  // Scores
+  document.getElementById('playerScore').textContent = data.player_total;
+  const ds = document.getElementById('dealerScore');
+  if (data.dealer_hand.length > 0) {
+    ds.style.display = '';
+    ds.textContent = data.phase === 'done' ? data.dealer_total : '?';
+  } else {
+    ds.style.display = 'none';
+  }
+
+  // Messages
+  setMessages(data.messages);
+
+  // Deck info
+  document.getElementById('deckInfo').textContent =
+    `${data.deck_remaining} cards remaining in deck`;
+
+  // Modifiers
+  renderModifiers(data);
+
+  // Buttons
+  const playing = data.phase === 'playing';
+  document.getElementById('hitBtn').disabled   = !playing;
+  document.getElementById('standBtn').disabled = !playing;
+  document.getElementById('selfBtn').disabled  = !playing;
+  document.getElementById('tableBtn').disabled = !playing;
+  document.getElementById('ultBtn').disabled   = !playing || data.ultimate_used;
+  if (data.ultimate_used) document.getElementById('ultBtn').classList.add('used');
+
+  // New game button
+  document.getElementById('newGameBtn').style.display = data.phase === 'done' ? '' : 'none';
+
+  // Result banner
+  if (data.phase === 'done') {
+    showResult(data.result, data.player_total, data.dealer_total);
+    closePanel('selfPanel');
+    closePanel('tablePanel');
+  } else {
+    hideResult();
+  }
+}
+
+function renderModifiers(data) {
+  const tags = document.getElementById('modTags');
+  tags.innerHTML = '';
+  data.self_modifiers.forEach(([gate, qubit]) => {
+    const t = document.createElement('span');
+    t.className = 'mod-tag';
+    t.textContent = `${gate} q${qubit}`;
+    tags.appendChild(t);
+  });
+  data.table_modifiers.forEach(([ctrl, tgt, gate]) => {
+    const t = document.createElement('span');
+    t.className = 'mod-tag';
+    t.textContent = `${gate} t${ctrl}→c${tgt}`;
+    tags.appendChild(t);
+  });
+}
+
+function showResult(result, pt, dt) {
+  const banner = document.getElementById('resultBanner');
+  const title  = document.getElementById('resultTitle');
+  const sub    = document.getElementById('resultSub');
+  banner.className = 'result-banner show';
+
+  const map = {
+    'player_blackjack': { cls:'win',  t:'Blackjack!',   s:'Natural 21 — instant win' },
+    'player_wins':      { cls:'win',  t:'You Win',       s:`${pt} vs dealer's ${dt}` },
+    'bust':             { cls:'lose', t:'Bust',           s:`Total: ${pt}` },
+    'dealer_wins':      { cls:'lose', t:'Dealer Wins',   s:`${dt} vs your ${pt}` },
+    'tie':              { cls:'tie',  t:'Tie',            s:`Both at ${pt}` }
+  };
+  const r = map[result] || { cls:'tie', t:'Game Over', s:'' };
+  banner.classList.add(r.cls);
+  title.textContent = r.t;
+  sub.textContent   = r.s;
+}
+
+function hideResult() {
+  const b = document.getElementById('resultBanner');
+  b.className = 'result-banner';
+}
+
+// ── API CALLS ────────────────────────────────────────────────
+
+async function newGame() {
+  hideResult();
+  resetSelections();
+  closePanel('selfPanel');
+  closePanel('tablePanel');
+  const data = await post('/new_game', {});
+  updateUI(data);
+}
+
+async function doAction(action, params = {}) {
+  const data = await post('/action', { action, ...params });
+  updateUI(data);
+}
+
+async function post(endpoint, body) {
+  try {
+    const r = await fetch(API + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    return await r.json();
+  } catch (e) {
+    setMessages(['Connection error — is the Flask server running?']);
+    return null;
+  }
+}
+
+// ── GATE PANEL LOGIC ─────────────────────────────────────────
+
+function togglePanel(panelId, btnId) {
+  const panel = document.getElementById(panelId);
+  const btn   = document.getElementById(btnId);
+  const other = panelId === 'selfPanel' ? 'tablePanel' : 'selfPanel';
+  const otherBtn = panelId === 'selfPanel' ? 'tableBtn' : 'selfBtn';
+
+  closePanel(other);
+  document.getElementById(otherBtn).classList.remove('active');
+
+  const isOpen = panel.classList.contains('show');
+  panel.classList.toggle('show', !isOpen);
+  btn.classList.toggle('active', !isOpen);
+}
+
+function closePanel(panelId) {
+  document.getElementById(panelId).classList.remove('show');
+}
+
+function selectOpt(el, key, val) {
+  // Deselect siblings in same group
+  el.parentElement.querySelectorAll('.gp-opt').forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+  sel[key] = val;
+
+  // Show RY strength row if RY selected
+  if (key === 'selfGate') {
+    document.getElementById('ryStrengthRow').classList.toggle('show', val === 'RY');
+  }
+  // Show CRY options if CRY selected
+  if (key === 'tableGate') {
+    document.getElementById('cryRow').classList.toggle('show', val === 'CRY');
+  }
+}
+
+function resetSelections() {
+  Object.keys(sel).forEach(k => sel[k] = null);
+  document.querySelectorAll('.gp-opt').forEach(b => b.classList.remove('sel'));
+  document.getElementById('ryStrengthRow').classList.remove('show');
+  document.getElementById('cryRow').classList.remove('show');
+}
+
+async function queueSelfGate() {
+  if (sel.selfGate === null || sel.selfQubit === null) {
+    alert('Please select a gate and a qubit.'); return;
+  }
+  if (sel.selfGate === 'RY' && sel.selfStrength === null) {
+    alert('Please select a strength for RY.'); return;
+  }
+  const theta = sel.selfGate === 'RY' ? [0.0, 0.4, 0.8, 1.2][sel.selfStrength] : null;
+  closePanel('selfPanel');
+  document.getElementById('selfBtn').classList.remove('active');
+  const data = await post('/action', {
+    action: 'self_gate', gate: sel.selfGate, qubit: sel.selfQubit, theta
+  });
+  if (data) updateUI(data);
+}
+
+async function queueTableGate() {
+  if (sel.tableControl === null || sel.tableTarget === null || sel.tableGate === null) {
+    alert('Please select control qubit, target qubit, and gate type.'); return;
+  }
+  if (sel.tableGate === 'CRY' && (sel.cryMode === null || sel.cryStrength === null)) {
+    alert('Please select mode and strength for CRY.'); return;
+  }
+  let theta = null;
+  if (sel.tableGate === 'CRY') {
+    const sign = sel.cryMode === 'h' ? 1 : -1;
+    theta = sign * [0.0, 0.4, 0.8, 1.2][sel.cryStrength];
+  }
+  closePanel('tablePanel');
+  document.getElementById('tableBtn').classList.remove('active');
+  const data = await post('/action', {
+    action: 'table_gate',
+    control: sel.tableControl, target: sel.tableTarget,
+    gate: sel.tableGate, theta
+  });
+  if (data) updateUI(data);
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Blackjack — Architecture & Rules</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --felt: #0a1f0e;
+  --felt-mid: #0f2a14;
+  --felt-light: #163520;
+  --gold: #c9a84c;
+  --gold-light: #e8c97a;
+  --gold-dim: rgba(201,168,76,0.12);
+  --gold-border: rgba(201,168,76,0.25);
+  --ivory: #f0e6cc;
+  --ivory-dim: rgba(240,230,204,0.65);
+  --ivory-muted: rgba(240,230,204,0.32);
+  --ivory-ghost: rgba(240,230,204,0.1);
+  --red: #c0392b;
+  --red-dim: rgba(192,57,43,0.18);
+  --cyan: #5bc8d4;
+  --cyan-dim: rgba(91,200,212,0.12);
+  --sage: #7ab87a;
+  --sage-dim: rgba(122,184,122,0.12);
+  --steel: #8ab8c8;
+  --panel: rgba(255,255,255,0.025);
+  --border: rgba(240,230,204,0.08);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--felt);
+  color: var(--ivory);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse at 15% 40%, rgba(201,168,76,0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 15%, rgba(91,200,212,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 90%, rgba(122,184,122,0.03) 0%, transparent 50%);
+  pointer-events: none; z-index: 0;
+}
+
+/* subtle felt weave */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Crect width='6' height='6' fill='%230a1f0e'/%3E%3Ccircle cx='1.5' cy='1.5' r='0.7' fill='%230c2210' opacity='0.6'/%3E%3Ccircle cx='4.5' cy='4.5' r='0.7' fill='%230c2210' opacity='0.6'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0; opacity: 0.7;
+}
+
+.suit-corner { position: fixed; font-size: 130px; line-height: 1; pointer-events: none; z-index: 0; opacity: 0.025; font-family: serif; }
+.suit-tl { top:-20px; left:-10px; color:var(--ivory); }
+.suit-tr { top:-20px; right:-10px; color:var(--red); transform:scaleX(-1); }
+.suit-bl { bottom:-20px; left:-10px; color:var(--red); }
+.suit-br { bottom:-20px; right:-10px; color:var(--ivory); transform:scaleX(-1); }
+
+.page { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 60px 36px 110px; }
+
+/* ── HEADER ── */
+header { margin-bottom: 56px; animation: riseIn .9s cubic-bezier(.22,1,.36,1) both; }
+
+.pre-title { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.suit-row { display: flex; gap: 8px; }
+.suit-row span { color: var(--gold); font-family: serif; font-size: 20px; opacity: 0.55; }
+.eyebrow { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 4px; color: var(--gold); text-transform: uppercase; opacity: 0.55; }
+
+h1 { font-family: 'Playfair Display', serif; font-size: clamp(40px, 6vw, 76px); font-weight: 900; line-height: 1; letter-spacing: -1.5px; }
+h1 em { font-style: italic; font-weight: 400; color: var(--ivory-dim); }
+h1 strong { background: linear-gradient(130deg, var(--gold-light) 0%, var(--gold) 45%, #9a7218 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 900; }
+
+.header-rule { width: 100%; height: 1px; background: linear-gradient(90deg, var(--gold) 0%, rgba(201,168,76,0.3) 40%, transparent 75%); margin: 22px 0 18px; }
+.subtitle { font-size: 14px; font-weight: 300; color: var(--ivory-dim); line-height: 1.85; max-width: 580px; }
+.subtitle b { color: var(--gold-light); font-weight: 500; }
+
+/* ── STATUS BAR ── */
+.status-bar {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  margin-bottom: 52px; padding: 13px 22px;
+  border: 1px solid var(--gold-border); border-radius: 4px;
+  background: var(--gold-dim);
+  animation: riseIn .7s .1s cubic-bezier(.22,1,.36,1) both;
+}
+.pip { width: 7px; height: 7px; border-radius: 50%; background: #4caf50; box-shadow: 0 0 9px #4caf50; animation: glow 2.2s ease-in-out infinite; flex-shrink: 0; }
+.status-text { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gold); letter-spacing: 1px; }
+.sdiv { width: 1px; height: 16px; background: var(--gold-border); opacity: .5; }
+.badge { font-family: 'DM Mono', monospace; font-size: 10px; padding: 3px 9px; border: 1px solid var(--gold-border); border-radius: 3px; color: var(--gold); opacity: .7; }
+
+/* ── SECTION HEADER ── */
+.sh { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.sh-num { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--gold); opacity: .45; letter-spacing: 2px; flex-shrink: 0; }
+.sh-label { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: var(--ivory-muted); flex-shrink: 0; }
+.sh-rule { flex: 1; height: 1px; background: var(--border); }
+
+/* ── RULE BANNER ── */
+/* A wide rule/explanation block that sits above or between cards */
+.rule-banner {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 4px 4px 0;
+  padding: 18px 24px;
+  margin-bottom: 14px;
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.rule-banner.cyan-accent { border-left-color: var(--cyan); }
+.rule-banner.sage-accent { border-left-color: var(--sage); }
+.rule-banner.red-accent  { border-left-color: var(--red); }
+.rule-banner.steel-accent { border-left-color: var(--steel); }
+
+.rb-icon { font-family: 'Playfair Display', serif; font-size: 28px; flex-shrink: 0; margin-top: 1px; line-height: 1; color: var(--gold); opacity: 0.5; }
+.rb-body {}
+.rb-title { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 700; color: var(--ivory); margin-bottom: 5px; }
+.rb-text { font-size: 12.5px; font-weight: 300; color: var(--ivory-dim); line-height: 1.8; }
+.rb-text b { color: var(--ivory); font-weight: 500; }
+.rb-text code { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gold-light); background: rgba(201,168,76,0.1); padding: 1px 5px; border-radius: 2px; }
+.rb-text .hl-cyan { color: var(--cyan); font-weight: 500; }
+.rb-text .hl-sage { color: var(--sage); font-weight: 500; }
+.rb-text .hl-red { color: #e07060; font-weight: 500; }
+
+/* ── CARDS ── */
+.layer { margin-bottom: 8px; animation: riseIn .65s cubic-bezier(.22,1,.36,1) both; }
+.layer:nth-child(1){animation-delay:.12s}.layer:nth-child(2){animation-delay:.22s}
+.layer:nth-child(3){animation-delay:.32s}.layer:nth-child(4){animation-delay:.42s}
+.layer:nth-child(5){animation-delay:.52s}
+
+.card-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
+
+.card {
+  flex: 1; min-width: 185px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 18px 20px 16px;
+  position: relative; overflow: hidden;
+  transition: transform .25s cubic-bezier(.22,1,.36,1), border-color .2s, background .2s, box-shadow .25s;
+}
+.card::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%;
+  background: var(--accent, var(--gold)); border-radius: 3px 0 0 3px; opacity: .7;
+}
+.card::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.018) 0%, transparent 55%);
+  pointer-events: none;
+}
+.card:hover {
+  transform: translateY(-4px);
+  background: rgba(255,255,255,0.04);
+  border-color: var(--accent, var(--gold));
+  box-shadow: 0 14px 36px rgba(0,0,0,.45), 0 0 0 1px var(--accent, var(--gold));
+}
+
+.card.gold { --accent: var(--gold); }
+.card.cyan { --accent: var(--cyan); }
+.card.red  { --accent: var(--red); }
+.card.sage { --accent: var(--sage); }
+.card.steel { --accent: var(--steel); }
+
+.card-suit { font-family: serif; font-size: 18px; margin-bottom: 9px; opacity: .45; }
+.card.gold .card-suit { color: var(--gold); }
+.card.cyan .card-suit { color: var(--cyan); }
+.card.red  .card-suit { color: var(--red); }
+.card.sage .card-suit { color: var(--sage); }
+.card.steel .card-suit { color: var(--steel); }
+
+.card-title { font-family: 'Playfair Display', serif; font-size: 13.5px; font-weight: 700; color: var(--ivory); margin-bottom: 7px; }
+.card-tech  { font-size: 11.5px; font-weight: 300; color: var(--ivory-dim); line-height: 1.7; margin-bottom: 9px; }
+.card-tech code { font-family: 'DM Mono', monospace; font-size: 10.5px; color: var(--gold-light); background: rgba(201,168,76,0.1); padding: 1px 5px; border-radius: 2px; }
+
+/* Rule blurb inside card */
+.card-rule {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--ivory-muted);
+  line-height: 1.7;
+  font-style: italic;
+}
+.card-rule b { color: var(--ivory-dim); font-style: normal; font-weight: 500; }
+
+.tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
+.tag { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .4px; padding: 2px 7px; border-radius: 2px; text-transform: uppercase; border: 1px solid var(--border); color: var(--ivory-muted); }
+
+/* ── CONNECTOR ── */
+.connector { display: flex; align-items: center; gap: 14px; margin: 16px 0 14px 4px; }
+.conn-line { width: 2px; height: 30px; background: linear-gradient(to bottom, var(--gold), transparent); opacity: .18; margin-left: 22px; }
+.conn-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 2px; color: var(--ivory-muted); text-transform: uppercase; opacity: .45; padding-left: 10px; border-left: 1px solid var(--border); }
+
+/* ── GATE TABLE ── */
+.gate-table-wrap { margin-bottom: 14px; animation: riseIn .65s .4s both; }
+.gate-table {
+  width: 100%; border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px; overflow: hidden;
+}
+.gate-table thead tr { background: rgba(201,168,76,0.07); border-bottom: 1px solid var(--border); }
+.gate-table th { font-family: 'DM Mono', monospace; font-size: 9.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); padding: 10px 16px; text-align: left; font-weight: 400; }
+.gate-table td { font-size: 11.5px; padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--ivory-dim); font-weight: 300; vertical-align: top; line-height: 1.6; }
+.gate-table tr:last-child td { border-bottom: none; }
+.gate-table tr:hover td { background: rgba(255,255,255,0.025); }
+.gate-table td:first-child { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gold-light); white-space: nowrap; }
+.gate-table td:nth-child(2) { color: var(--ivory); font-weight: 400; }
+.gate-table td .effect { font-size: 10.5px; color: var(--ivory-muted); display: block; margin-top: 2px; }
+
+/* ── BIG DIVIDER ── */
+.big-div { margin: 56px 0 44px; display: flex; align-items: center; gap: 20px; }
+.big-div::before,.big-div::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); opacity:.18; }
+.big-div-inner { display:flex; align-items:center; gap:10px; white-space:nowrap; }
+.big-div span { font-family:'Playfair Display',serif; font-size:12px; color:var(--gold); letter-spacing:3px; text-transform:uppercase; opacity:.55; }
+.big-div .ds { color:var(--gold); font-family:serif; font-size:14px; opacity:.45; }
+
+/* ── HOW TO PLAY ── */
+.how-to-play {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 28px 32px;
+  margin-bottom: 44px;
+  animation: riseIn .65s .08s both;
+}
+.htp-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; color: var(--ivory); margin-bottom: 4px; }
+.htp-sub { font-size: 12px; font-weight: 300; color: var(--ivory-muted); margin-bottom: 24px; font-style: italic; }
+.htp-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+.htp-step { position: relative; padding-left: 20px; }
+.htp-step::before { content: ''; position: absolute; left: 0; top: 8px; width: 1px; height: calc(100% - 8px); background: var(--border); }
+.htp-n { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 900; color: var(--gold); opacity: .25; line-height: 1; margin-bottom: 6px; }
+.htp-step-title { font-size: 12px; font-weight: 600; color: var(--ivory); margin-bottom: 4px; letter-spacing: 0.2px; }
+.htp-step-text { font-size: 11.5px; font-weight: 300; color: var(--ivory-dim); line-height: 1.7; }
+.htp-step-text b { color: var(--gold-light); font-weight: 500; }
+
+/* ── FIX GRID ── */
+.fix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 44px; animation: riseIn .65s .5s both; }
+.fix-item { display: flex; gap: 13px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 3px; align-items: flex-start; transition: background .2s; }
+.fix-item:hover { background: rgba(255,255,255,.035); }
+.fix-pill { font-family: 'DM Mono', monospace; font-size: 9px; padding: 3px 7px; border-radius: 2px; flex-shrink: 0; margin-top: 1px; letter-spacing: .4px; text-transform: uppercase; }
+.fix-pill.ok  { background: rgba(74,222,128,.1); color: #4ade80; border: 1px solid rgba(74,222,128,.2); }
+.fix-pill.rm  { background: rgba(251,146,60,.1); color: #fb923c; border: 1px solid rgba(251,146,60,.2); }
+.fix-title { font-size: 12px; font-weight: 500; color: var(--ivory); margin-bottom: 3px; }
+.fix-desc  { font-size: 11px; color: var(--ivory-muted); line-height: 1.65; font-weight: 300; }
+.fix-desc code { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--gold-light); }
+
+/* ── ROADMAP ── */
+.rm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; animation: riseIn .65s .6s both; }
+.rm-item { padding: 18px 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 3px; transition: transform .2s, background .2s, border-color .2s; }
+.rm-item:hover { transform: translateY(-3px); background: rgba(255,255,255,.04); border-color: var(--gold-border); }
+.rm-n { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 900; color: var(--gold-border); line-height: 1; margin-bottom: 9px; opacity: .4; }
+.rm-t { font-size: 12px; font-weight: 500; color: var(--ivory); margin-bottom: 5px; }
+.rm-d { font-size: 11px; color: var(--ivory-muted); line-height: 1.65; font-weight: 300; }
+.rm-d code { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--gold-light); opacity: .85; }
+
+/* ── GAME EMBED ── */
+.game-embed-wrap {
+  margin-bottom: 52px;
+  animation: riseIn .65s .09s cubic-bezier(.22,1,.36,1) both;
+}
+.game-embed-frame {
+  width: 100%;
+  height: 820px;
+  border: 1px solid var(--gold-border);
+  border-radius: 4px;
+  background: var(--felt-mid);
+  display: block;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.45);
+}
+.game-embed-notice {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; letter-spacing: 1px;
+  color: var(--ivory-muted);
+}
+.game-embed-notice .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gold); opacity: .45; flex-shrink: 0;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes riseIn { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+@keyframes glow   { 0%,100%{opacity:1;box-shadow:0 0 9px #4caf50} 50%{opacity:.45;box-shadow:0 0 4px #4caf50} }
+</style>
+</head>
+<body>
+
+<div class="suit-corner suit-tl">♠</div>
+<div class="suit-corner suit-tr">♥</div>
+<div class="suit-corner suit-bl">♦</div>
+<div class="suit-corner suit-br">♣</div>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <header>
+    <div class="pre-title">
+      <div class="suit-row"><span>♠</span><span>♥</span><span>♦</span><span>♣</span></div>
+      <span class="eyebrow">Architecture & Rules · Qiskit · Python</span>
+    </div>
+    <h1><em>Quantum</em> <strong>Blackjack</strong></h1>
+    <div class="header-rule"></div>
+    <p class="subtitle">A card game where <b>randomness collapses from superposition</b>, and players wield real quantum gate operations — H, X, Z, RY, CX, CZ, CRY — as strategic weapons before each draw.</p>
+  </header>
+
+  <!-- STATUS -->
+  <div class="status-bar">
+    <div class="pip"></div>
+    <span class="status-text">AerSimulator · shots=1 · 4q card + 2q table</span>
+    <div class="sdiv"></div>
+    <span class="badge">CLI</span>
+    <span class="badge">Single File</span>
+    <span class="badge">Patched v2</span>
+  </div>
+
+  <!-- PLAY THE GAME -->
+  <div class="sh" style="animation:riseIn .65s .06s both">
+    <span class="sh-num">♥</span>
+    <span class="sh-label">Play the Game</span>
+    <div class="sh-rule"></div>
+  </div>
+  <div class="game-embed-wrap">
+    <iframe
+      class="game-embed-frame"
+      src="http://localhost:5000"
+      title="Quantum Blackjack"
+      frameborder="0"
+      allow="cross-origin-isolated"
+    ></iframe>
+    <div class="game-embed-notice">
+      <div class="dot"></div>
+      Requires the Flask server to be running locally — <code style="font-family:'DM Mono',monospace;font-size:10px;color:var(--gold-light);background:rgba(201,168,76,0.1);padding:1px 5px;border-radius:2px;">python App.py</code> — then open this page in your browser.
+    </div>
+  </div>
+
+  <!-- HOW TO PLAY -->
+  <div class="sh" style="animation:riseIn .65s .07s both">
+    <span class="sh-num">♠</span>
+    <span class="sh-label">How to Play</span>
+    <div class="sh-rule"></div>
+  </div>
+  <div class="how-to-play">
+    <div class="htp-title">Game Overview</div>
+    <div class="htp-sub">Standard Blackjack rules — with quantum mechanics as the deck</div>
+    <div class="htp-steps">
+      <div class="htp-step">
+        <div class="htp-n">01</div>
+        <div class="htp-step-title">You get two cards</div>
+        <div class="htp-step-text">Each card is drawn by measuring a quantum circuit in superposition. The result is <b>genuinely random</b> — not a dice roll or RNG seed.</div>
+      </div>
+      <div class="htp-step">
+        <div class="htp-n">02</div>
+        <div class="htp-step-title">Hit, stand, or use gates</div>
+        <div class="htp-step-text">On your turn, you can <b>hit</b> for another card, <b>stand</b> to end, or <b>apply quantum gates</b> to bias the next draw before it collapses.</div>
+      </div>
+      <div class="htp-step">
+        <div class="htp-n">03</div>
+        <div class="htp-step-title">Beat 17 without busting</div>
+        <div class="htp-step-text">Get closer to <b>21</b> than the dealer without going over. The dealer always hits until reaching 17+. Closest to 21 wins.</div>
+      </div>
+      <div class="htp-step">
+        <div class="htp-n">04</div>
+        <div class="htp-step-title">Aces are flexible</div>
+        <div class="htp-step-text">Aces count as <b>11</b>, but automatically soften to <b>1</b> if your total would exceed 21. You can hold multiple soft Aces.</div>
+      </div>
+      <div class="htp-step">
+        <div class="htp-n">05</div>
+        <div class="htp-step-title">Gates change the odds</div>
+        <div class="htp-step-text">Apply <b>self-gates</b> (to your card register) or <b>table gates</b> (entangling table and card qubits) to tilt probabilities in your favour — or sabotage them.</div>
+      </div>
+      <div class="htp-step">
+        <div class="htp-n">06</div>
+        <div class="htp-step-title">The Ultimate ability</div>
+        <div class="htp-step-text">Once per sequence, fire your <b>Ultimate</b>: applies CX gates from both table qubits to matching card qubits — maximum entanglement on the next draw.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ LAYER I ═══════════════ -->
+  <div class="sh" style="animation:riseIn .65s .12s both">
+    <span class="sh-num">I</span>
+    <span class="sh-label">Player Interface</span>
+    <div class="sh-rule"></div>
+  </div>
+
+  <div class="rule-banner" style="animation:riseIn .65s .14s both">
+    <div class="rb-icon">◆</div>
+    <div class="rb-body">
+      <div class="rb-title">What the player does on each turn</div>
+      <div class="rb-text">Every turn you choose one action from the prompt. <b>Hit</b> draws immediately. <b>Self</b> and <b>Table</b> queue a gate modifier — it won't take effect until you hit next. <b>Stand</b> locks in your total and hands control to the dealer. <b>Ultimate</b> is a special one-shot entanglement move. Modifiers accumulate and are <b>all cleared</b> after each hit, so you stack them up, then fire.</div>
+    </div>
+  </div>
+
+  <div class="layer" style="animation-delay:.16s">
+    <div class="card-row">
+      <div class="card gold">
+        <div class="card-suit">♠</div>
+        <div class="card-title">Action Parser</div>
+        <div class="card-tech">Reads <code>stdin</code>. Routes to one of five handlers: <code>hit / self / table / ultimate / stand</code>. Falls through to "Invalid action" on anything else.</div>
+        <div class="card-rule"><b>Rule:</b> You only get one action per turn. Gates don't draw a card — they set up the <em>next</em> draw. You must still hit to resolve them.</div>
+        <div class="tags"><span class="tag">input()</span><span class="tag">strip().lower()</span></div>
+      </div>
+      <div class="card gold">
+        <div class="card-suit">♦</div>
+        <div class="card-title">Gate Selector</div>
+        <div class="card-tech">Prompts for gate type, target qubit (0–3 for self, 0–1 for table control), and RY strength level (1–3). Appends a tuple to the modifier queue.</div>
+        <div class="card-rule"><b>Rule:</b> Gate choice is permanent until the next hit clears it. You can stack multiple gates — e.g. apply RY then CX, and both fire together on the next draw.</div>
+        <div class="tags"><span class="tag">self_modifiers[]</span><span class="tag">table_modifiers[]</span></div>
+      </div>
+      <div class="card gold">
+        <div class="card-suit">♣</div>
+        <div class="card-title">Ultimate System</div>
+        <div class="card-tech">Appends two CX operations: <code>table[0]→card[0]</code> and <code>table[1]→card[1]</code> into the table modifier queue. Resolves on the next hit.</div>
+        <div class="card-rule"><b>Rule:</b> The table register is also in superposition. Entangling it with your card register creates <em>correlated</em> collapse — the most powerful quantum manipulation available.</div>
+        <div class="tags"><span class="tag">CX ×2</span><span class="tag">one-shot</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="conn-line"></div><div class="conn-label">modifier lists passed to circuit builder on hit</div></div>
+
+  <!-- ═══════════════ LAYER II ═══════════════ -->
+  <div class="sh" style="animation:riseIn .65s .22s both">
+    <span class="sh-num">II</span>
+    <span class="sh-label">Quantum Circuit Engine</span>
+    <div class="sh-rule"></div>
+  </div>
+
+  <div class="rule-banner cyan-accent" style="animation:riseIn .65s .24s both">
+    <div class="rb-icon">ψ</div>
+    <div class="rb-body">
+      <div class="rb-title">How quantum randomness replaces a deck of cards</div>
+      <div class="rb-text">In a normal deck, randomness comes from shuffling. Here, randomness comes from <span class="hl-cyan">quantum superposition</span>. A 4-qubit register is put into a state where <b>all 16 possible cards exist simultaneously</b> — until you measure it. The act of measurement <em>forces</em> the universe to pick one. No shuffling. No seed. Just physics.<br><br>Gates applied before measurement <b>tilt the probability amplitudes</b> — some cards become more likely, others less. This is how player strategy maps to quantum mechanics.</div>
+    </div>
+  </div>
+
+  <div class="layer" style="animation-delay:.26s">
+    <div class="card-row">
+      <div class="card cyan">
+        <div class="card-suit">⬡</div>
+        <div class="card-title">Circuit Factory</div>
+        <div class="card-tech">Rebuilds a fresh <code>QuantumCircuit</code> every draw: 4 card qubits + 2 table qubits + 4-bit classical register. Hadamard gates on all qubits create equal superposition across all 64 states.</div>
+        <div class="card-rule"><b>Why rebuild each time?</b> Once you measure a circuit, it collapses. To draw again, you need a fresh superposition — like re-shuffling a new deck every card.</div>
+        <div class="tags"><span class="tag">4q card</span><span class="tag">2q table</span><span class="tag">H⊗6</span></div>
+      </div>
+      <div class="card cyan">
+        <div class="card-suit">∿</div>
+        <div class="card-title">Gate Applicator</div>
+        <div class="card-tech">Replays your queued self-gates (H, X, Z, RY) then table→card gates (CRY, CX, CZ) onto the fresh circuit before measurement, in the order they were saved.</div>
+        <div class="card-rule"><b>Gates bias the draw.</b> X flips a qubit (forces one bit to 1 or 0). RY rotates amplitude smoothly. CX entangles — if the table qubit is |1⟩, it flips your card qubit.</div>
+        <div class="tags"><span class="tag">apply_self_gate()</span><span class="tag">apply_table_gate()</span></div>
+      </div>
+      <div class="card cyan">
+        <div class="card-suit">◎</div>
+        <div class="card-title">AerSimulator</div>
+        <div class="card-tech">Transpiles the circuit for Aer and runs it with <code>shots=1</code>. A single shot means one measurement — one collapse — producing exactly one 4-bit classical outcome.</div>
+        <div class="card-rule"><b>shots=1 is the rule.</b> More shots would give you statistics about many possible cards — but in the game, you draw <em>one</em> card. So you measure <em>once</em>.</div>
+        <div class="tags"><span class="tag">shots=1</span><span class="tag">transpile()</span><span class="tag">single collapse</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GATE REFERENCE TABLE -->
+  <div class="sh" style="margin-top:28px; animation:riseIn .65s .28s both">
+    <span class="sh-num">↳</span>
+    <span class="sh-label">Player Gate Reference</span>
+    <div class="sh-rule"></div>
+  </div>
+  <div class="gate-table-wrap">
+    <table class="gate-table">
+      <thead>
+        <tr>
+          <th>Gate</th>
+          <th>Type</th>
+          <th>What it does to your draw</th>
+          <th>Strategic use</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>H</td>
+          <td>Self</td>
+          <td>Re-applies Hadamard to one card qubit — maintains uniform superposition on that bit. <span class="effect">No bias; resets any prior rotation on that qubit.</span></td>
+          <td>Use to undo a previous gate on a qubit before hitting.</td>
+        </tr>
+        <tr>
+          <td>X</td>
+          <td>Self</td>
+          <td>Bit-flip on one card qubit — flips it from |0⟩ to |1⟩ or vice versa. <span class="effect">Forces one bit of the card to a definite value, halving the card range.</span></td>
+          <td>Narrow outcomes toward high-value cards (set bit 3 = 1 → 8–King range).</td>
+        </tr>
+        <tr>
+          <td>Z</td>
+          <td>Self</td>
+          <td>Phase-flip on one card qubit — flips the sign of the |1⟩ amplitude. <span class="effect">Doesn't change measurement probabilities on its own; useful when combined with other gates.</span></td>
+          <td>Combine with H for Hadamard-Z-Hadamard = X effect on different basis.</td>
+        </tr>
+        <tr>
+          <td>RY(θ)</td>
+          <td>Self</td>
+          <td>Rotates qubit on Y-axis by angle θ. <span class="effect">Strength 1/2/3 maps to θ = 0.4/0.8/1.2 rad — tilts probability toward |0⟩ or |1⟩ smoothly.</span></td>
+          <td>Subtle control. Use strength 3 to strongly bias one bit; strength 1 for gentle nudge.</td>
+        </tr>
+        <tr>
+          <td>CRY(θ)</td>
+          <td>Table→Card</td>
+          <td>Conditional RY: only rotates card qubit if the control table qubit is |1⟩. <span class="effect">Mode "h" (help) rotates toward |1⟩; mode "s" (sabotage) rotates away.</span></td>
+          <td>Probabilistic boost — only fires if table qubit collapses to 1 at measurement.</td>
+        </tr>
+        <tr>
+          <td>CX</td>
+          <td>Table→Card</td>
+          <td>CNOT: flips a card qubit if the table control qubit is |1⟩. <span class="effect">Creates entanglement — card and table outcomes become correlated.</span></td>
+          <td>Used in the Ultimate. Strongest entanglement move available.</td>
+        </tr>
+        <tr>
+          <td>CZ</td>
+          <td>Table→Card</td>
+          <td>Controlled-Z: applies phase flip to card qubit if table qubit is |1⟩. <span class="effect">Like CX but in the phase domain — affects interference patterns.</span></td>
+          <td>Combine with Hadamard on card qubit to produce CX-like effects on superposed states.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="connector"><div class="conn-line"></div><div class="conn-label">4-bit bitstring output from measurement</div></div>
+
+  <!-- ═══════════════ LAYER III ═══════════════ -->
+  <div class="sh" style="animation:riseIn .65s .32s both">
+    <span class="sh-num">III</span>
+    <span class="sh-label">Decode Layer</span>
+    <div class="sh-rule"></div>
+  </div>
+
+  <div class="rule-banner steel-accent" style="animation:riseIn .65s .34s both">
+    <div class="rb-icon">♠</div>
+    <div class="rb-body">
+      <div class="rb-title">Turning a bitstring into a playing card</div>
+      <div class="rb-text">The quantum circuit produces a 4-bit classical string like <code>1011</code>. This is mapped to a card name — <code>1011</code> = Jack. There are 16 possible bitstrings, covering Ace through King plus two Unknown edge cases. <b>Note:</b> Qiskit returns bits in reversed order (qubit 3 first), so the bitstring is flipped before lookup — this ensures that when you target qubit 0 with a gate, it actually controls the lowest bit as expected.</div>
+    </div>
+  </div>
+
+  <div class="layer" style="animation-delay:.36s">
+    <div class="card-row">
+      <div class="card steel">
+        <div class="card-suit">⇄</div>
+        <div class="card-title">Bit → Card Mapper</div>
+        <div class="card-tech">Takes <code>counts</code> dict, extracts the single bitstring key, reverses it with <code>[::-1]</code> (bug fix), then looks it up in a 16-entry dict mapping binary to card names.</div>
+        <div class="card-rule"><b>Mapping:</b> <code>0001</code>=Ace, <code>0010</code>=2 … <code>1010</code>=10, <code>1011</code>=Jack, <code>1100</code>=Queen, <code>1101</code>=King, <code>1110</code>=Ace (2nd). <code>0000</code> and <code>1111</code> return Unknown (value 0).</div>
+        <div class="tags"><span class="tag">bit_to_card()</span><span class="tag">[::-1] fixed</span></div>
+      </div>
+      <div class="card steel">
+        <div class="card-suit">Σ</div>
+        <div class="card-title">Value + Ace Softening</div>
+        <div class="card-tech"><code>card_to_value()</code> converts name to integer. <code>add_card_to_total()</code> tracks ace count separately, then reduces Ace from 11→1 in a while loop whenever total &gt; 21.</div>
+        <div class="card-rule"><b>Rule:</b> Aces are "soft" — worth 11 unless that would bust you, in which case they drop to 1. You can hold multiple soft Aces and they each soften independently.</div>
+        <div class="tags"><span class="tag">card_to_value()</span><span class="tag">add_card_to_total()</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="conn-line"></div><div class="conn-label">player_total and ace_count updated</div></div>
+
+  <!-- ═══════════════ LAYER IV ═══════════════ -->
+  <div class="sh" style="animation:riseIn .65s .42s both">
+    <span class="sh-num">IV</span>
+    <span class="sh-label">Game State Engine</span>
+    <div class="sh-rule"></div>
+  </div>
+
+  <div class="rule-banner sage-accent" style="animation:riseIn .65s .44s both">
+    <div class="rb-icon">↻</div>
+    <div class="rb-body">
+      <div class="rb-title">The game loop and when it ends</div>
+      <div class="rb-text">The loop runs as long as <code>player_total ≤ 21</code> and <code>standing == False</code>. Each iteration lets you act once. If you <b>bust</b> (go over 21), <code>standing</code> is set to True and the loop exits immediately — game over. If you <b>stand</b>, the loop exits cleanly and control passes to the dealer. <span class="hl-sage">Modifier lists are cleared after every hit</span> — gates are single-use per draw, not permanent.</div>
+    </div>
+  </div>
+
+  <div class="layer" style="animation-delay:.46s">
+    <div class="card-row">
+      <div class="card sage">
+        <div class="card-suit">◈</div>
+        <div class="card-title">Setup Phase</div>
+        <div class="card-tech"><code>set_up()</code> draws card 0, resets the circuit, draws card 1, and prints your opening hand. Both draws use fresh H-initialized circuits with no modifiers.</div>
+        <div class="card-rule"><b>Rule:</b> Your opening two cards are always drawn from pure superposition — equal probability for all values. Gates only become available after the opening deal.</div>
+        <div class="tags"><span class="tag">set_up()</span><span class="tag">2 draws</span></div>
+      </div>
+      <div class="card sage">
+        <div class="card-suit">↻</div>
+        <div class="card-title">Game Loop</div>
+        <div class="card-tech"><code>while (player_total &lt;= 21) and (not standing)</code>. Rebuilds circuit with accumulated modifiers on hit, then calls <code>measure_qc_card_cout()</code> to collapse.</div>
+        <div class="card-rule"><b>Rule:</b> You can apply multiple gates across separate turns before hitting. They stack. But the moment you hit, <em>all</em> queued gates fire at once — then the list resets.</div>
+        <div class="tags"><span class="tag">while loop</span><span class="tag">standing flag</span></div>
+      </div>
+      <div class="card sage">
+        <div class="card-suit">≡</div>
+        <div class="card-title">Mutable State</div>
+        <div class="card-tech">Module-level globals hold game state: <code>hand_cards</code> (full history), <code>player_total</code>, <code>ace_count</code>, <code>table_modifiers[]</code>, <code>self_modifiers[]</code>, <code>standing</code>.</div>
+        <div class="card-rule"><b>Design note:</b> All state is global and mutable — easy to follow now, but a future <code>GameState</code> dataclass would make multiplayer and saving much simpler.</div>
+        <div class="tags"><span class="tag">globals</span><span class="tag">lists as queue</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="conn-line"></div><div class="conn-label">if standing == True and player_total ≤ 21</div></div>
+
+  <!-- ═══════════════ LAYER V ═══════════════ -->
+  <div class="sh" style="animation:riseIn .65s .52s both">
+    <span class="sh-num">V</span>
+    <span class="sh-label">Dealer Engine</span>
+    <div class="sh-rule"></div>
+  </div>
+
+  <div class="rule-banner red-accent" style="animation:riseIn .65s .54s both">
+    <div class="rb-icon">§</div>
+    <div class="rb-body">
+      <div class="rb-title">How the dealer plays — and why you can't affect it</div>
+      <div class="rb-text">The dealer follows <b>hard house rules</b>: always hit below 17, always stand at 17+. No choices, no strategy, no gates. Every dealer draw uses a <span class="hl-red">fresh H-initialized circuit with no modifiers</span> — pure 50/50 superposition on every qubit. This mirrors real casino rules, where the dealer's play is deterministic and players have no influence over the dealer's hand after standing.</div>
+    </div>
+  </div>
+
+  <div class="layer" style="animation-delay:.56s">
+    <div class="card-row">
+      <div class="card red">
+        <div class="card-suit">♥</div>
+        <div class="card-title">Dealer Loop</div>
+        <div class="card-tech">Rebuilds a fresh circuit each iteration. No modifier lists applied. Calls <code>measure_qc_card_cout()</code> directly. Loops until <code>dealer_total ≥ 17</code>.</div>
+        <div class="card-rule"><b>Rule:</b> Dealer must hit on 16 or below. Dealer must stand on 17 or above. Soft 17 (Ace + 6) also stands. This is the standard Vegas house rule.</div>
+        <div class="tags"><span class="tag">hits until 17</span><span class="tag">no modifiers</span><span class="tag">pure superposition</span></div>
+      </div>
+      <div class="card red">
+        <div class="card-suit">♦</div>
+        <div class="card-title">Outcome Resolver</div>
+        <div class="card-tech">Four-way comparison after dealer stands: dealer bust → player wins; dealer total &gt; player → dealer wins; dealer total &lt; player → player wins; equal → tie.</div>
+        <div class="card-rule"><b>Win conditions:</b> Dealer busting always wins for you regardless of your total. A tie means neither wins. There's no surrender or double-down in this version yet.</div>
+        <div class="tags"><span class="tag">bust → win</span><span class="tag">higher wins</span><span class="tag">tie</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIVIDER -->
+  <div class="big-div">
+    <div class="big-div-inner">
+      <span class="ds">♠</span><span>Patches & Roadmap</span><span class="ds">♦</span>
+    </div>
+  </div>
+
+  <!-- FIXES -->
+  <div class="sh" style="animation:riseIn .65s .57s both">
+    <span class="sh-num">♣</span>
+    <span class="sh-label">Bug Fixes Applied (v2)</span>
+    <div class="sh-rule"></div>
+  </div>
+  <div class="fix-grid">
+    <div class="fix-item"><div class="fix-pill ok">Fixed</div><div><div class="fix-title">Bit-order reversal</div><div class="fix-desc">Added <code>[::-1]</code> in <code>bit_to_card()</code> so gate operations on qubit 0 map to the correct bit position.</div></div></div>
+    <div class="fix-item"><div class="fix-pill ok">Fixed</div><div><div class="fix-title">Global register leak</div><div class="fix-desc"><code>measure_qc_card_cout</code> now takes <code>card</code> and <code>c_out</code> as explicit parameters instead of silently capturing globals.</div></div></div>
+    <div class="fix-item"><div class="fix-pill rm">Removed</div><div><div class="fix-title">Dead functions</div><div class="fix-desc"><code>measure_qc_1024()</code> and <code>qc_variables(n)</code> were defined but never called. Removed cleanly.</div></div></div>
+    <div class="fix-item"><div class="fix-pill rm">Removed</div><div><div class="fix-title">6 unused imports</div><div class="fix-desc"><code>unittest</code>, <code>numpy</code>, <code>Statevector</code>, <code>gates</code>, <code>array_to_latex</code>, <code>math</code> — none used in any live logic path.</div></div></div>
+  </div>
+
+  <!-- ROADMAP -->
+  <div class="sh" style="animation:riseIn .65s .6s both">
+    <span class="sh-num">♦</span>
+    <span class="sh-label">Suggested Next Steps</span>
+    <div class="sh-rule"></div>
+  </div>
+  <div class="rm-grid">
+    <div class="rm-item"><div class="rm-n">01</div><div class="rm-t">Modularize into files</div><div class="rm-d">Split into <code>circuit.py</code>, <code>decoder.py</code>, <code>game.py</code>, <code>dealer.py</code>. Everything is currently flat in one script.</div></div>
+    <div class="rm-item"><div class="rm-n">02</div><div class="rm-t">GameState dataclass</div><div class="rm-d">Replace module globals with a <code>@dataclass</code> holding <code>player_total</code>, <code>hand_cards</code>, modifier lists, <code>standing</code>.</div></div>
+    <div class="rm-item"><div class="rm-n">03</div><div class="rm-t">Weighted deck model</div><div class="rm-d">Encode remaining card frequencies as RY angles — simulate a depleting deck rather than flat equal superposition.</div></div>
+    <div class="rm-item"><div class="rm-n">04</div><div class="rm-t">Blackjack detection</div><div class="rm-d">Check for natural 21 (Ace + 10-value card) after <code>set_up()</code>. Standard rules pay 3:2 on a natural — easy win to add.</div></div>
+    <div class="rm-item"><div class="rm-n">05</div><div class="rm-t">Live circuit visualizer</div><div class="rm-d">Add a Streamlit UI that renders <code>qc.draw('mpl')</code> and Bloch sphere states updating as you select gates.</div></div>
+    <div class="rm-item"><div class="rm-n">06</div><div class="rm-t">Real hardware backend</div><div class="rm-d">Swap AerSimulator for <code>QiskitRuntimeService</code> to run on IBM Quantum hardware — true quantum randomness.</div></div>
+  </div>
+
+</div>
+</body>
+</html>
