@@ -278,3 +278,5 @@ if __name__ == '__main__':
     print('\n  Quantum Blackjack server starting...')
     print('  Open http://localhost:5000 in your browser.\n')
     app.run(debug=False, port=5000)
+
+    
