@@ -7,7 +7,7 @@ import numpy as np
 def measure_qc_1024():
     qc.measure_all()
     qc.draw(output="text")
-    sim = AerSimulator()
+    sim = AerSimulator(shots=10)
     t_qc = transpile(qc, sim)
     result = sim.run(t_qc).result()
     counts = result.get_counts()
@@ -20,9 +20,11 @@ qc.h(0)
 qc.h(1)
 qc.h(2)
 qc.cx(0, 1)
+qc.cx(1, 2)
+qc.ry(np.pi/3, 0)
+qc.ry(np.pi/6, 1)
 qc.rz(np.pi/4, 2)
 counts = measure_qc_1024()
-
 #NOTES
 note_map = {
     '000': 60,
