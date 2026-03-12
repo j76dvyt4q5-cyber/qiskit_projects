@@ -160,6 +160,11 @@ def index():
     html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'quantum_blackjack.html')
     with open(html_path, 'r', encoding='utf-8') as f:
         return f.read()
+@app.route('/architecture')
+def architecture():
+    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'architecture_v4.html')
+    with open(html_path, 'r', encoding='utf-8') as f:
+        return f.read()
 
 @app.route('/api/new_game', methods=['POST', 'OPTIONS'])
 def new_game():
