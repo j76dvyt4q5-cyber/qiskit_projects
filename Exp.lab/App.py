@@ -96,7 +96,7 @@ def add_card_to_total(card, total, ace_count):
 def is_blackjack(total, hand):
     return total == 21 and len(hand) == 2
 
-# ── GAME STATE ─────────────────────────────────────────────────
+#GAME STATE
 
 state = {}
 
@@ -153,7 +153,7 @@ def state_json():
         'messages':        state['messages']
     })
 
-# ── ROUTES ─────────────────────────────────────────────────────
+#ROUTES
 
 @app.route('/')
 def index():
@@ -277,7 +277,7 @@ def _run_dealer():
         state['result'] = 'tie'
         state['messages'].append(f'Tie — both at {pt}.')
 
-# ── ENTRY ──────────────────────────────────────────────────────
+#ENTRY
 
 if __name__ == '__main__':
     print('\n  Quantum Blackjack server starting...')
