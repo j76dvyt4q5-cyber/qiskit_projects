@@ -16,6 +16,8 @@ def measure_qc_1024():
 
 #QUANTUM CIRCUIT
 generate_song = False
+melody_sequence = []
+accompaniment_sequence = []
 qc = QuantumCircuit(6)
 qc.h(0)
 qc.h(1)
@@ -80,7 +82,6 @@ while not generate_song:
                 qc.cx(0, 2)
             if CX_choice_3 == "2":
                 qc.cx(2, 0)
-
     #CY GATE
     if melody_action == "5":
         melody_action_CY_choice = input("Which two qubits would you like to apply a CY gate to? {1. 0 & 1 | 2. 0 & 2 | 3. 1 & 2}")
@@ -102,9 +103,7 @@ while not generate_song:
                 qc.cy(0, 2)
             if CY_choice_3 == "2":
                 qc.cy(2, 0)
-
 counts = measure_qc_1024()
-#NOTES
 melody_map = {
     '000': 60,  # C4
     '001': 61,  # C#4
@@ -126,8 +125,9 @@ accompaniment_map = {
     '110': 54,  # F#3
     '111': 55,  # G3
 }
-melody_sequence = []
-accompaniment_sequence = []
+#NOTES
+
+note_sequence = []
 for bitstring, count in counts.items():
     melody_bits = bitstring[:3]
     accompaniment_bits = bitstring[3:]
