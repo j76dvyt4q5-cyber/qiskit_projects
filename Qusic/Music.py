@@ -5,6 +5,7 @@ from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 from qiskit import transpile
 import os
+from quantum_music import gate_map 
 
 app = Flask(__name__)
 
@@ -28,3 +29,15 @@ if __name__ == '__main__':
     print(' Open http://localhost:5000 in your browser.\n')
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
+
+@app.route('/apply_gate', methods = ['POST'])
+def apply_gate():
+    data = request.get_json()
+    gate = data['gate']
+    qubit = data['qubit']
+    gate_map[gate](qubit)
+    return jsonify({'status': 'ok'})
+
+@app.route('/generate circuit', methods = ['GET'])
+
+

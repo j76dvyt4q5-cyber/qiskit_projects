@@ -20,21 +20,6 @@ generate_song = False
 melody_sequence = []
 accompaniment_sequence = []
 qc = QuantumCircuit(6)
-qc.h(0)
-qc.h(1)
-qc.h(2)
-qc.h(3)
-qc.h(4)
-qc.h(5)
-qc.cx(0, 3)
-qc.cx(1, 4)
-qc.cx(2, 5)
-qc.ry(np.pi/4, 0)
-qc.ry(-np.pi/4, 1)
-qc.ry(np.pi/4, 2)
-qc.rz(-np.pi/6, 3)
-qc.rz(np.pi/3, 4)
-qc.rz(-np.pi/4, 5)
 
 #MAP DICTS
 gate_map = {'1': qc.h,'2': qc.x,'3': qc.z}
@@ -65,16 +50,16 @@ accompaniment_map = {
 
 while not generate_song:
     action  = input("What would you like to do? {1. Superposition | 2. Apply gate | 3. Generate}")
-    if action == "3":
+    if action == "3" or 'Generate':
         generate_song = True
         continue
-    if action == "1":
+    if action == "1" or 'Superposition':
         superposition_action = input("Would you like to put your melody or accompaniment into superposition? {1. Melody | 2. Accompaniment}")
-        if superposition_action == "1":
+        if superposition_action == "1" or 'M':
             qc.h(0)
             qc.h(1)
             qc.h(2)
-        if superposition_action == "2":
+        if superposition_action == "2" or 'A':
             qc.h(3)
             qc.h(4)
             qc.h(5)
