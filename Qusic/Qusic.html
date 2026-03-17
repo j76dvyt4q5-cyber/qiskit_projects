@@ -3,5 +3,20 @@
 <body>
     <h1>Qusic</h1>
     <p>Quantum Music Generator</p>
+        <button onclick="applyGate('H', 0)">H on qubit 0</button>
+        <button onclick="applyGate('X', 0)">X on qubit 0</button>
+        <button onclick="applyGate('Z', 0)">Z on qubit 0</button>
+    <script>
+        function applyGate(gate, qubit) {
+            fetch('/apply_gate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({gate: gate, qubit: qubit})
+            })} 
+        function generate() {
+            window.location.href = '/generate'
+            }
+    </script>
+        <button onclick="generate('quantum_melody', 1)">Generate a midi file</button>
 </body>
 </html>
