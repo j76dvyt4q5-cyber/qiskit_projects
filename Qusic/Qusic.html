@@ -6,6 +6,7 @@
         <button onclick="applyGate('H', 0)">H on qubit 0</button>
         <button onclick="applyGate('X', 0)">X on qubit 0</button>
         <button onclick="applyGate('Z', 0)">Z on qubit 0</button>
+        <button onclick="superposition()">Superimpose every note (qubit) </button>
     <script>
         function applyGate(gate, qubit) {
             fetch('/apply_gate', {
@@ -16,7 +17,11 @@
         function generate() {
             window.location.href = '/generate'
             }
+        function superposition() {
+            fetch('/superposition')
+            }
+        
     </script>
-        <button onclick="generate('quantum_melody', 1)">Generate a midi file</button>
+        <button onclick="generate()">Generate a midi file</button>
 </body>
 </html>

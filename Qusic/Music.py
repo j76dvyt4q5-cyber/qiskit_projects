@@ -53,8 +53,6 @@ def home():
 
 qc = QuantumCircuit(6)
 gate_map = {'H': qc.h, 'X': qc.x, 'Z': qc.z}
-for i in range(6):
-    qc.h(i)
 
 @app.route('/apply_gate', methods = ['POST'])
 def apply_gate():
@@ -88,7 +86,13 @@ def generate():
     with open(output_path, "wb") as f:
         midi.writeFile(f)
     return send_from_directory(os.path.dirname(__file__), 'quantum_melody_acc.mid', as_attachment=True)
- 
+
+@app.route('/superposition', methods = ['GET'])
+def superposition():
+    for i in range(6):
+        qc.h(i)
+    return jsonify({'status': 'ok'})
+
 if __name__ == '__main__':
     print('\n Qusic server starting...')
     print(' Open http://localhost:5000 in your browser.\n')
