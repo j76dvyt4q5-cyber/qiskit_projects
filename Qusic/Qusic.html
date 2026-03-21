@@ -1,7 +1,371 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qusic</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #0d1117;
+    --s1: #161b22;
+    --s2: #1c2128;
+    --br: rgba(255,255,255,0.08);
+    --tx: #cdd9e5;
+    --td: #768390;
+    --tb: #f0f6fc;
+    --mel: #79c0ff;
+    --acc: #bc8cff;
+    --gen: #56d364;
+    --warn: #e3b341;
+    --dng: #ff7b72;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Mono',monospace;font-size:12px;line-height:1.6;padding:32px 16px 60px}
+.hdr{text-align:center;margin-bottom:36px}
+.hdr h1{font-family:'Instrument Serif',serif;font-style:italic;font-size:clamp(48px,9vw,96px);color:var(--tb);letter-spacing:-0.03em;line-height:0.95}
+.hdr p{font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--td);margin-top:10px}
+.wrap{max-width:1020px;margin:0 auto;display:grid;grid-template-columns:280px 1fr;gap:14px}
+@media(max-width:680px){.wrap{grid-template-columns:1fr}}
+.box{background:var(--s1);border:1px solid var(--br);border-radius:10px;padding:18px}
+.lbl{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--td);margin-bottom:10px}
+.tabs{display:flex;gap:5px;margin-bottom:12px}
+.tab{flex:1;padding:6px 8px;border-radius:5px;border:1px solid var(--br);background:transparent;color:var(--td);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all 0.15s}
+.tab.m{border-color:var(--mel);color:var(--mel);background:rgba(121,192,255,0.07)}
+.tab.a{border-color:var(--acc);color:var(--acc);background:rgba(188,140,255,0.07)}
+.qrow{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:12px}
+.qb{padding:8px 3px;border-radius:5px;border:1px solid var(--br);background:var(--s2);color:var(--td);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;text-align:center;transition:all 0.12s}
+.qb:hover{border-color:rgba(255,255,255,0.15);color:var(--tx)}
+.qb.sm{border-color:var(--mel);color:var(--mel);background:rgba(121,192,255,0.1)}
+.qb.sa{border-color:var(--acc);color:var(--acc);background:rgba(188,140,255,0.1)}
+.gg{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px}
+.gb{padding:10px 5px;border-radius:6px;border:1px solid var(--br);background:var(--s2);color:var(--tx);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;transition:all 0.12s}
+.gb:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.14)}
+.gd{display:block;font-size:8px;color:var(--td);margin-top:2px}
+.sb{background:var(--s2);border:1px solid var(--br);border-radius:7px;padding:12px;margin-bottom:10px}
+.sh{display:flex;justify-content:space-between;font-size:10px;color:var(--td);margin-bottom:7px}
+.sh span{color:var(--tx);font-size:11px}
+input[type=range]{width:100%;accent-color:var(--mel);cursor:pointer}
+.rg{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px}
+.spg{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}
+.sp{padding:10px 7px;border-radius:7px;border:1px solid var(--br);background:transparent;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;text-align:left;transition:all 0.14s}
+.sp .sd{display:block;font-size:8px;color:var(--td);margin-top:2px;line-height:1.4}
+.sp.g{color:var(--warn);border-color:rgba(227,179,65,0.25)}
+.sp.g:hover{background:rgba(227,179,65,0.07)}
+.sp.r{color:var(--dng);border-color:rgba(255,123,114,0.25)}
+.sp.r:hover{background:rgba(255,123,114,0.07)}
+.gen{width:100%;padding:14px;border-radius:8px;border:1px solid rgba(86,211,100,0.35);background:rgba(86,211,100,0.07);color:var(--gen);font-family:'Instrument Serif',serif;font-style:italic;font-size:19px;cursor:pointer;transition:all 0.2s}
+.gen:hover{background:rgba(86,211,100,0.13);border-color:rgba(86,211,100,0.55)}
+.log{margin-top:10px;background:var(--s2);border:1px solid var(--br);border-radius:6px;padding:9px 12px;font-size:10px;color:var(--td);min-height:34px;line-height:1.5}
+.hi{color:var(--mel)}
+.cl{font-size:10px;color:var(--td);line-height:1.8;margin-top:4px}
+.ptabs{display:flex;gap:5px;margin-bottom:12px}
+.ptab{padding:4px 12px;border-radius:16px;border:1px solid var(--br);background:transparent;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;color:var(--td);transition:all 0.14s}
+.ptab.on{background:var(--s2);color:var(--tx);border-color:rgba(255,255,255,0.14)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:560px){.two{grid-template-columns:1fr}}
+.rl{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:8px}
+.rl.m{color:var(--mel)}.rl.a{color:var(--acc)}
+.bars{display:flex;flex-direction:column;gap:3px;min-height:60px}
+.brow{display:grid;grid-template-columns:40px 1fr 42px;align-items:center;gap:5px}
+.bn{font-size:11px;color:var(--tx);text-align:right;font-family:'DM Mono',monospace;white-space:nowrap}
+.bt{background:var(--s2);border-radius:2px;height:6px;overflow:hidden}
+.bf{height:100%;border-radius:2px;transition:width 0.3s ease}
+.bf.m{background:var(--mel)}.bf.a{background:var(--acc)}
+.bpct{font-size:9px;color:var(--td)}
+.empty{font-size:10px;color:var(--td);padding:8px 0}
+.pwrap{overflow-x:auto;padding-bottom:4px;margin-bottom:16px;-webkit-overflow-scrolling:touch}
+.piano{display:flex;align-items:flex-start;height:96px;width:max-content}
+.wk{
+    position:relative;
+    width:26px;height:96px;
+    background:#dde1e7;
+    border:1px solid #9ba1a8;
+    border-top:none;
+    border-radius:0 0 3px 3px;
+    flex-shrink:0;
+    z-index:1;
+    transition:background 0.25s;
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    padding-bottom:4px;
+}
+.bk{
+    position:relative;
+    width:17px;height:58px;
+    background:#1c2128;
+    border:1px solid #010409;
+    border-top:none;
+    border-radius:0 0 3px 3px;
+    margin-left:-9px;
+    margin-right:-8px;
+    flex-shrink:0;
+    z-index:2;
+    transition:background 0.25s;
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    padding-bottom:3px;
+}
+.kl{font-size:6px;color:#5c6370;pointer-events:none;white-space:nowrap;font-family:'DM Mono',monospace;line-height:1;writing-mode:horizontal-tb}
+.bk .kl{color:#90a0b0;font-size:5px}
+</style>
+</head>
 <body>
+
+<div class="hdr">
     <h1>Qusic</h1>
-    <p>Quantum Music Generator</p>
+    <p>Collapse the wavefunction · compose with quantum mechanics</p>
+</div>
+
+<div class="wrap">
+    <div class="box">
+        <div class="lbl">Gate controls</div>
+        <div class="tabs">
+            <button class="tab m" id="tM" onclick="selReg('melody',this)">♪ Melody q0–q4</button>
+            <button class="tab" id="tA" onclick="selReg('acc',this)">♩ Accomp q5–q9</button>
+        </div>
+        <div class="lbl">Qubit</div>
+        <div class="qrow" id="qg"></div>
+        <div class="lbl">Single-qubit gates</div>
+        <div class="gg">
+            <button class="gb" onclick="ag('H')">H<span class="gd">Randomize</span></button>
+            <button class="gb" onclick="ag('X')">X<span class="gd">Flip qubit</span></button>
+            <button class="gb" onclick="ag('Z')">Z<span class="gd">Phase flip</span></button>
+        </div>
+        <div class="sb">
+            <div class="sh">Rotation angle <span id="adsp">0.00π</span></div>
+            <input type="range" id="asl" min="-100" max="100" value="0" step="1" oninput="ua(this.value)">
+            <div class="rg">
+                <button class="gb" onclick="ag('RY')">RY<span class="gd">Bias probability</span></button>
+                <button class="gb" onclick="ag('RZ')">RZ<span class="gd">Phase / tension</span></button>
+            </div>
+        </div>
+        <div class="lbl">Special</div>
+        <div class="spg">
+            <button class="sp g" onclick="doGHZ()">GHZ<span class="sd">Max entanglement — both voices together</span></button>
+            <button class="sp r" onclick="doReset()">Reset<span class="sd">Wipe all gates — back to superposition</span></button>
+        </div>
+        <button class="gen" onclick="doGen()">Generate MIDI ↓</button>
+        <div class="log" id="lg"><span class="hi">→</span> Ready — select a qubit and apply a gate</div>
+    </div>
+
+    <div>
+        <div class="box" style="margin-bottom:12px">
+            <div class="lbl">Circuit state</div>
+            <div class="cl" id="cl">All 10 qubits in equal superposition — every note equally likely</div>
+        </div>
+        <div class="box">
+            <div class="lbl">Real-time probability</div>
+            <div class="ptabs">
+                <button class="ptab on" onclick="sv('bars',this)">Bar chart</button>
+                <button class="ptab" onclick="sv('piano',this)">Piano</button>
+            </div>
+
+            <div id="bv">
+                <div class="two">
+                    <div>
+                        <div class="rl m">Melody</div>
+                        <div class="bars" id="mb"><div class="empty">Loading...</div></div>
+                    </div>
+                    <div>
+                        <div class="rl a">Accompaniment</div>
+                        <div class="bars" id="ab"><div class="empty">Loading...</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="pv" style="display:none">
+                <div class="rl m" style="margin-bottom:6px">Melody — C4 to G6</div>
+                <div class="pwrap"><div class="piano" id="mp"></div></div>
+                <div class="rl a" style="margin-bottom:6px">Accompaniment — C2 to G3</div>
+                <div class="pwrap"><div class="piano" id="ap"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const NN=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+const BLK=new Set(['C#','D#','F#','G#','A#'])
+let reg='melody', selQ=0, glog=[]
+
+function mname(m){ return NN[m%12]+(Math.floor(m/12)-1) }
+
+window.onload = function(){
+    buildQG()
+    buildPiano('mp', 60, 32, 'ml')
+    buildPiano('ap', 36, 32, 'ac')
+    fetchP()
+}
+
+function selReg(r, btn){
+    reg = r
+    selQ = r === 'melody' ? 0 : 5
+    document.getElementById('tM').className = 'tab' + (r==='melody' ? ' m' : '')
+    document.getElementById('tA').className = 'tab' + (r==='acc' ? ' a' : '')
+    buildQG()
+    slog('Switched to ' + r + ' register')
+}
+
+function buildQG(){
+    var g = document.getElementById('qg')
+    g.innerHTML = ''
+    var off = reg === 'melody' ? 0 : 5
+    for(var i=0; i<5; i++){
+        var q = off+i
+        var b = document.createElement('button')
+        b.className = 'qb' + (selQ===q ? (reg==='melody' ? ' sm' : ' sa') : '')
+        b.textContent = 'q'+q;
+        (function(qi){ b.onclick = function(){ selQ=qi; buildQG(); slog('Selected q'+qi) } })(q)
+        g.appendChild(b)
+    }
+}
+
+function ua(v){ document.getElementById('adsp').textContent = (v/100).toFixed(2)+'π' }
+
+function ag(gate){
+    var body = {gate: gate, qubit: selQ}
+    if(gate==='RY'||gate==='RZ'){
+        body.angle = (parseInt(document.getElementById('asl').value)/100)*Math.PI
+    }
+    fetch('/apply_gate', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+    })
+    .then(function(r){ return r.json() })
+    .then(function(){
+        var a = body.angle !== undefined ? ' θ='+(body.angle/Math.PI).toFixed(2)+'π' : ''
+        var e = gate + a + ' → q' + selQ
+        glog.push(e)
+        slog('Applied: ' + e)
+        updateCL()
+        fetchP()
+    })
+    .catch(function(){ slog('Error — is the server running?') })
+}
+
+function doGHZ(){
+    fetch('/ghz')
+    .then(function(){ glog.push('GHZ (q0–q9)'); slog('GHZ — max entanglement'); updateCL(); fetchP() })
+    .catch(function(){ slog('Error — is the server running?') })
+}
+
+function doReset(){
+    fetch('/reset')
+    .then(function(){
+        glog = []
+        slog('Reset — equal superposition')
+        document.getElementById('cl').textContent = 'All 10 qubits in equal superposition — every note equally likely'
+        fetchP()
+    })
+    .catch(function(){ slog('Error — is the server running?') })
+}
+
+function doGen(){
+    slog('Measuring circuit... generating MIDI...')
+    window.location.href = '/generate'
+}
+
+function slog(m){ document.getElementById('lg').innerHTML = '<span class="hi">→</span> ' + m }
+
+function updateCL(){
+    var el = document.getElementById('cl')
+    if(!glog.length){ el.textContent = 'All 10 qubits in equal superposition — every note equally likely'; return }
+    var show = glog.slice(-5)
+    var h = glog.length > 5 ? '<span style="color:var(--td)">...' + (glog.length-5) + ' earlier</span><br>' : ''
+    h += show.map(function(e){ return '<span style="color:var(--tx)">· '+e+'</span>' }).join('<br>')
+    el.innerHTML = h
+}
+
+function fetchP(){
+    fetch('/probabilities')
+    .then(function(r){ return r.json() })
+    .then(function(d){
+        renderBars(d.melody, 'mb', 'm')
+        renderBars(d.accompaniment, 'ab', 'a')
+        renderPianoProbs(d.melody, 'mp', 60, 'ml')
+        renderPianoProbs(d.accompaniment, 'ap', 36, 'ac')
+    })
+    .catch(function(){
+        document.getElementById('mb').innerHTML = '<div class="empty">Could not reach server</div>'
+        document.getElementById('ab').innerHTML = '<div class="empty">Could not reach server</div>'
+    })
+}
+
+function renderBars(probs, id, cls){
+    var el = document.getElementById(id)
+    el.innerHTML = ''
+    var entries = Object.entries(probs)
+    if(!entries.length){
+        el.innerHTML = '<div class="empty">No data — apply a gate to shape the distribution</div>'
+        return
+    }
+    entries.sort(function(a,b){ return b[1]-a[1] })
+    entries = entries.slice(0, 12)
+    var mx = Math.max.apply(null, entries.map(function(e){ return e[1] }))
+    entries.forEach(function(entry){
+        var note = entry[0], p = entry[1]
+        var pct = Math.round(p/mx*100)
+        var row = document.createElement('div')
+        row.className = 'brow'
+        row.innerHTML = '<div class="bn">'+note+'</div>'
+            + '<div class="bt"><div class="bf '+cls+'" style="width:'+pct+'%"></div></div>'
+            + '<div class="bpct">'+(p*100).toFixed(1)+'%</div>'
+        el.appendChild(row)
+    })
+}
+
+function buildPiano(id, start, count, cls){
+    var el = document.getElementById(id)
+    el.innerHTML = ''
+    for(var i=0; i<count; i++){
+        var m = start+i
+        var name = NN[m%12]
+        var oct = Math.floor(m/12)-1
+        var isB = BLK.has(name)
+        var k = document.createElement('div')
+        k.className = isB ? 'bk' : 'wk'
+        k.id = 'k-'+cls+'-'+m
+        k.dataset.note = name+oct
+        var lbl = document.createElement('div')
+        lbl.className = 'kl'
+        lbl.textContent = name+oct
+        k.appendChild(lbl)
+        el.appendChild(k)
+    }
+}
+
+function renderPianoProbs(probs, id, start, cls){
+    for(var i=0; i<32; i++){
+        var k = document.getElementById('k-'+cls+'-'+(start+i))
+        if(!k) continue
+        k.style.background = k.classList.contains('bk') ? '#1c2128' : '#dde1e7'
+    }
+    var vals = Object.values(probs)
+    if(!vals.length) return
+    var mx = Math.max.apply(null, vals)
+    var rgb = cls==='ml' ? '121,192,255' : '188,140,255'
+    Object.entries(probs).forEach(function(entry){
+        var note = entry[0], p = entry[1]
+        var k = document.querySelector('#'+id+' [data-note="'+note+'"]')
+        if(!k) return
+        var t = p/mx
+        var isB = k.classList.contains('bk')
+        k.style.background = isB
+            ? 'rgba('+rgb+','+(0.3+t*0.7).toFixed(2)+')'
+            : 'rgba('+rgb+','+(t*0.82).toFixed(2)+')'
+    })
+}
+
+function sv(v, btn){
+    document.querySelectorAll('.ptab').forEach(function(t){ t.classList.remove('on') })
+    btn.classList.add('on')
+    document.getElementById('bv').style.display = v==='bars' ? 'block' : 'none'
+    document.getElementById('pv').style.display = v==='piano' ? 'block' : 'none'
+}
+</script>
 </body>
 </html>
