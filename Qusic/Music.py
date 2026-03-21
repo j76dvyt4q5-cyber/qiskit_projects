@@ -135,8 +135,8 @@ def probabilities():
     for bitstring, prob in probs.items():
         if prob < 0.0001:
             continue  # skip near-zero probabilities
-        melody_bits = bitstring[:5]
-        acc_bits = bitstring[5:]
+        melody_bits = bitstring[5:]
+        acc_bits = bitstring[:5]
         melody_note = midi_to_name(melody_map[melody_bits])
         acc_note = midi_to_name(accompaniment_map[acc_bits])
 
