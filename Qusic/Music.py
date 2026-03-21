@@ -5,7 +5,6 @@ from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 from qiskit import transpile
 import os
-from quantum_music import gate_map 
 
 def measure_qc_1024():
     qc.measure_all()
@@ -38,6 +37,7 @@ accompaniment_map = {
     '110': 54,  # F#3
     '111': 55,  # G3
 }
+
 app = Flask(__name__)
 
 @app.after_request
@@ -52,14 +52,7 @@ def home():
     return send_from_directory('.', 'qusic.html')
 
 qc = QuantumCircuit(6)
-for i in range(6):
-    qc.h(i)
-
-if __name__ == '__main__':
-    print('\n Qusic server starting...')
-    print(' Open http://localhost:5000 in your browser.\n')
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=False, host="0.0.0.0", port=port)
+gate_map = {'H': qc.h, 'X': qc.x, 'Z': qc.z}
 
 @app.route('/apply_gate', methods = ['POST'])
 def apply_gate():
@@ -71,6 +64,7 @@ def apply_gate():
 
 @app.route('/generate', methods = ['GET'])
 def generate():
+    print("generate route hit")
     counts = measure_qc_1024()
     melody_sequence = []
     accompaniment_sequence = []
@@ -83,12 +77,26 @@ def generate():
     print("Accompaniment:", accompaniment_sequence)
     midi = MIDIFile(2)
     midi.addTempo(0, 0, 120)
+    midi.addTempo(1, 0, 120)
     for i, pitch in enumerate(melody_sequence):
         midi.addNote(0, 0, pitch, i, 1, 80)
     for i, pitch in enumerate(accompaniment_sequence):
         midi.addNote(1, 1, pitch, i, 1, 60)
-    with open("quantum_melody_acc.mid", "wb") as f:
+    output_path = os.path.join(os.path.dirname(__file__), 'quantum_melody_acc.mid')
+    with open(output_path, "wb") as f:
         midi.writeFile(f)
-    return send_from_directory('.', 'quantum_melody_acc.mid', as_attachment=True)
- 
+    return send_from_directory(os.path.dirname(__file__), 'quantum_melody_acc.mid', as_attachment=True)
+
+@app.route('/superposition', methods = ['GET'])
+def superposition():
+    for i in range(6):
+        qc.h(i)
+    return jsonify({'status': 'ok'})
+
+if __name__ == '__main__':
+    print('\n Qusic server starting...')
+    print(' Open http://localhost:5000 in your browser.\n')
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host="0.0.0.0", port=port)
+
 
