@@ -1,5 +1,0 @@
-flask
-qiskit
-qiskit-aer
-midiutil
-numpy

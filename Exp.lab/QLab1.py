@@ -125,6 +125,5 @@ qc.ch(q_0, q_2)
 measure_qc_1024()
 
 qc = QuantumCircuit(1)
-qc.h(0)
 qc.s(0)
 measure_qc_1024()
