@@ -1,3 +1,28 @@
+import numpy as np
+from flask import Flask, jsonify, request, send_from_directory
+import os
+from models import db
+
+@app.route('/')
+def create_app():
+    app = Flask(__name__)
+    app.config['SECRET_KEY'] = 'change-me'
+    app.config['SQLACHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+
+    db.init_app(app)
+
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(auth_bp)
+
+    return app
+
+if __name__ == '__main__':
+    app = create_app()
+    app.run(debug=True)
+
+
+
+
 class person:
     def __init__(self, name, age, gender, height, weight, exercise_hours, exercise_class):
         self.name = name
@@ -12,13 +37,30 @@ class person:
     def __str__(self):
         return f"Name: {self.name} | Age: {self.age} | Gender: {self.gender} | Height: {self.height} inches | Weight: {self.weight} pounds | Exercise hours: {self.exercise_hours} | Exercise class: {self.exercise_class}"
 
+tasks = {
+    '15 push ups',
+    '15 sit ups',
+    '30 sec plank',
+    '20 min run',
+    '15 squats',
+    '15 min meditation',
+    '30 min walk',
+    '15 lunges',
+    '5 min box breathing',
+    '15 bicycles',
+    '50 high-knees'
+}
+
+def add_new_task(day: dict):
+    day['task'] = np.random.choice(list(tasks))
+
 people = []
 user_name = input("Enter your name: ")
 user_age = int(input("Enter your age: "))
 user_gender = input("Enter your gender: ")
-if "M" in user_gender:
+if user_gender.lower().startswith('m'):
     user_gender = 'male'
-elif "F" in user_gender or "f" in user_gender:
+elif user_gender.lower().startswith('f'):
     user_gender = 'female'
 
 user_height = float(input("Enter your height in inches: "))
@@ -33,25 +75,13 @@ elif 6 > user_exercise_hours > 0:
 else: 
     user_exercise_class = 'none'
 
-user_profile = person(user_name, user_age, user_gender, user_weight, user_height, user_exercise_hours, user_exercise_class)
+user_profile = person(user_name, user_age, user_gender, user_height, user_weight, user_exercise_hours, user_exercise_class)
 
 print(user_profile)
 
-print("Your coach will now recommend your first workout")
+print("Your coach will now recommend your first workout:")
 
-day_1 = {
-    'task 1' : '20 push-ups',
-    'task 2' : '20 sit-ups',
-    'task 3' : '20 squats'
-}
-
-day_2 = {
-    'task 4' : '20 lunges'
-}
-
-Tasks = {
-    'day 1' : ['task 1', 'task 2', 'task 3'],
-    'day 2' : ['task 1', 'task 2', 'task 3', 'task 4'],
-}
-
-print(f"Your first workout is: {day_1['task 1']}, check in when you're done!")
+day_1 = {}
+add_new_task(day_1)
+ 
+print(f"    Your first workout is: {day_1['task']}, check in when you're done!")
