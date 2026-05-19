@@ -35,7 +35,6 @@ if __name__ == '__main__':
     app.run(debug=True)
 
 
-
 class person:
     def __init__(self, name, age, gender, height, weight, exercise_hours, exercise_class):
         self.name = name
