@@ -1,5 +1,7 @@
 import csv
+import gzip
 import os
+import struct
 import time
 from dataclasses import dataclass
 import torch
@@ -12,7 +14,6 @@ import pennylane as qml
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, Normalizer
 from sklearn.decomposition import PCA
-from sklearn.datasets import fetch_covtype, load_digits, make_circles
 import matplotlib.pyplot as plt
 from torch.utils.data import TensorDataset, DataLoader
 
@@ -23,11 +24,10 @@ BATCH_SIZE = int(os.getenv("QML_BATCH_SIZE", "32"))
 LEARNING_RATE = float(os.getenv("QML_LEARNING_RATE", "0.02"))
 OUTPUT_DIR = os.getenv("QML_OUTPUT_DIR", "QML/Outputs")
 DATASETS_TO_RUN = tuple(
-    item.strip() for item in os.getenv("QML_DATASETS", "circles,digits,covtype").split(",") if item.strip()
+    item.strip() for item in os.getenv("QML_DATASETS", "mnist,titanic,cytotoxicity").split(",") if item.strip()
 )
-DIGIT_CLASSES = tuple(
-    int(item.strip()) for item in os.getenv("QML_DIGIT_CLASSES", "0,1,2,3,4,5,6,7,8,9").split(",") if item.strip()
-)
+MNIST_SAMPLE_SIZE = int(os.getenv("QML_MNIST_SAMPLE_SIZE", "2400"))
+MNIST_PCA_COMPONENTS = int(os.getenv("QML_MNIST_PCA_COMPONENTS", "32"))
 RUN_GRAPHS = os.getenv("QML_RUN_GRAPHS", "1") != "0"
 SHOW_PLOTS = os.getenv("QML_SHOW_PLOTS", "0") == "1"
 
@@ -37,10 +37,10 @@ if N_EPOCHS < 1:
     raise ValueError("QML_EPOCHS must be at least 1.")
 if BATCH_SIZE < 1:
     raise ValueError("QML_BATCH_SIZE must be at least 1.")
-if len(set(DIGIT_CLASSES)) != len(DIGIT_CLASSES):
-    raise ValueError("QML_DIGIT_CLASSES must not contain duplicates.")
-if any(digit < 0 or digit > 9 for digit in DIGIT_CLASSES):
-    raise ValueError("QML_DIGIT_CLASSES may only contain digits 0 through 9.")
+if MNIST_SAMPLE_SIZE < 100:
+    raise ValueError("QML_MNIST_SAMPLE_SIZE must be at least 100.")
+if MNIST_PCA_COMPONENTS not in (8, 16, 32):
+    raise ValueError("QML_MNIST_PCA_COMPONENTS must be 8, 16, or 32 for amplitude embedding.")
 
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
@@ -95,8 +95,23 @@ def save_run_to_csv(filename, history_list):
         writer.writerow(['=========' * 9])
         f.flush()
 
+
+def _model_history_dir(output_dir, model_name):
+    return os.path.join(output_dir, f"03_{model_name}_History {{11}}")
+
+
+def _history_path(output_dir, model_name, dataset_label):
+    return os.path.join(
+        _model_history_dir(output_dir, model_name),
+        f"03_{model_name}_{dataset_label}_History.csv"
+    )
+
+
+def _graph_dir(output_dir):
+    return os.path.join(output_dir, "04_Graphs {11}")
+
 # ==========================================
-# 1. DATASET LOADER FACTORY
+# PREPROCESSING
 # ==========================================
 
 def _stratified_split(X, y):
@@ -108,11 +123,9 @@ def _stratified_split(X, y):
         stratify=y,
     )
 
-
 def _normalize_train_test(X_train, X_test):
     normalizer = Normalizer(norm='l2')
     return normalizer.fit_transform(X_train), normalizer.transform(X_test)
-
 
 def _pad_to_amplitude_dim(X, n_qubits):
     target_dim = 2 ** n_qubits
@@ -122,86 +135,155 @@ def _pad_to_amplitude_dim(X, n_qubits):
     X_padded[:, :X.shape[1]] = X
     return X_padded
 
+def _read_idx_images(path):
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rb") as f:
+        magic, n_images, n_rows, n_cols = struct.unpack(">IIII", f.read(16))
+        if magic != 2051:
+            raise ValueError(f"{path} is not an IDX image file.")
+        data = np.frombuffer(f.read(), dtype=np.uint8)
+    return data.reshape(n_images, n_rows * n_cols).astype(np.float32)
 
-def _digit_label(classes):
-    if tuple(classes) == tuple(range(10)):
-        return "digits_0-9"
-    return "digits_" + "-".join(str(item) for item in classes)
+def _read_idx_labels(path):
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rb") as f:
+        magic, n_labels = struct.unpack(">II", f.read(8))
+        if magic != 2049:
+            raise ValueError(f"{path} is not an IDX label file.")
+        labels = np.frombuffer(f.read(), dtype=np.uint8)
+    if labels.shape[0] != n_labels:
+        raise ValueError(f"{path} label count mismatch.")
+    return labels.astype(np.int64)
 
+def _load_local_mnist():
+    root = os.path.join(os.path.dirname(__file__), "data", "MNIST", "raw")
+    train_images = _read_idx_images(os.path.join(root, "train-images-idx3-ubyte"))
+    train_labels = _read_idx_labels(os.path.join(root, "train-labels-idx1-ubyte"))
+    test_images = _read_idx_images(os.path.join(root, "t10k-images-idx3-ubyte"))
+    test_labels = _read_idx_labels(os.path.join(root, "t10k-labels-idx1-ubyte"))
+    X = np.vstack([train_images, test_images])
+    y = np.concatenate([train_labels, test_labels])
+    if MNIST_SAMPLE_SIZE < len(y):
+        rng = np.random.default_rng(RANDOM_SEED)
+        keep_indices = []
+        per_class = max(1, MNIST_SAMPLE_SIZE // 10)
+        for digit in range(10):
+            digit_indices = np.flatnonzero(y == digit)
+            take = min(per_class, len(digit_indices))
+            keep_indices.extend(rng.choice(digit_indices, size=take, replace=False))
+        if len(keep_indices) < MNIST_SAMPLE_SIZE:
+            remaining = np.setdiff1d(np.arange(len(y)), np.array(keep_indices), assume_unique=False)
+            extra = rng.choice(remaining, size=MNIST_SAMPLE_SIZE - len(keep_indices), replace=False)
+            keep_indices.extend(extra)
+        keep_indices = np.array(keep_indices)
+        rng.shuffle(keep_indices)
+        X, y = X[keep_indices], y[keep_indices]
+    return X, y
+
+def _prep_scaled_pca_dataset(X, y, n_qubits, n_components, label, task_type, num_classes):
+    X_train, X_test, y_train, y_test = _stratified_split(X, y)
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
+    if n_components is not None:
+        pca = PCA(n_components=n_components, random_state=RANDOM_SEED)
+        X_train = pca.fit_transform(X_train)
+        X_test = pca.transform(X_test)
+    X_train, X_test = _normalize_train_test(X_train, X_test)
+    X_train = _pad_to_amplitude_dim(X_train, n_qubits)
+    X_test = _pad_to_amplitude_dim(X_test, n_qubits)
+    return DatasetBundle(
+        splits=(X_train, X_test, y_train.astype(np.int64), y_test.astype(np.int64)),
+        input_dim=X_train.shape[1],
+        n_qubits=n_qubits,
+        num_classes=num_classes,
+        task_type=task_type,
+        label=label,
+    )
+
+def _load_titanic_features():
+    path = os.path.join(os.path.dirname(__file__), "data", "train.csv")
+    df = pd.read_csv(path)
+    y = df["Survived"].to_numpy(dtype=np.int64)
+    features = pd.DataFrame({
+        "Pclass": df["Pclass"],
+        "Sex": df["Sex"].map({"male": 0.0, "female": 1.0}),
+        "Age": df["Age"],
+        "SibSp": df["SibSp"],
+        "Parch": df["Parch"],
+        "Fare": df["Fare"],
+        "FamilySize": df["SibSp"] + df["Parch"] + 1,
+        "IsAlone": ((df["SibSp"] + df["Parch"]) == 0).astype(float),
+        "HasCabin": df["Cabin"].notna().astype(float),
+        "Embarked": df["Embarked"].fillna("Missing"),
+        "Title": df["Name"].str.extract(r",\s*([^.]*)\.", expand=False).fillna("Unknown"),
+    })
+    for column in ["Age", "Fare"]:
+        features.loc[:, column] = features[column].fillna(features[column].median())
+    features = pd.get_dummies(features, columns=["Embarked", "Title"], drop_first=False)
+    return features.to_numpy(dtype=np.float32), y
+
+def _load_cytotoxicity_features():
+    root = os.path.join(os.path.dirname(__file__), "data_tutorial", "pqk")
+    frames = []
+    for filename in ("train_data.csv", "test_data.csv", "noisy_data.csv"):
+        path = os.path.join(root, filename)
+        raw = pd.read_csv(path, encoding="utf-8-sig")
+        if raw.shape[1] == 1:
+            header = raw.columns[0].split(",")
+            parsed = raw.iloc[:, 0].astype(str).str.split(",", expand=True)
+            parsed.columns = header
+        else:
+            parsed = raw.copy()
+        frames.append(parsed)
+    df = pd.concat(frames, ignore_index=True)
+    for column in df.columns:
+        df.loc[:, column] = pd.to_numeric(df[column], errors="coerce")
+    df = df.dropna().drop_duplicates()
+    target = df["Nalm 6 Cytotoxicity"].to_numpy(dtype=np.float32)
+    threshold = float(np.median(target))
+    y = (target >= threshold).astype(np.int64)
+    X = df.drop(columns=["Nalm 6 Cytotoxicity"]).to_numpy(dtype=np.float32)
+    return X, y
 
 def load_and_prep_dataset(name):
     print(f"\n--- Loading and Preprocessing: {name} ---")
 
-    if name == "circles":
-        X, y = make_circles(
-        n_samples=600,
-        noise=0.15,
-        factor=0.5,
-        random_state=RANDOM_SEED)
-        
-        n_qubits = 3
-        X_train, X_test, y_train, y_test = _stratified_split(X, y)
-        X_train, X_test = _normalize_train_test(X_train, X_test)
-        X_train = _pad_to_amplitude_dim(X_train, n_qubits)
-        X_test = _pad_to_amplitude_dim(X_test, n_qubits)
-        return DatasetBundle(
-            splits=(X_train, X_test, y_train.astype(np.int64), y_test.astype(np.int64)),
-            input_dim=X_train.shape[1],
+    if name == "mnist":
+        X, y = _load_local_mnist()
+        n_qubits = int(np.log2(MNIST_PCA_COMPONENTS))
+        return _prep_scaled_pca_dataset(
+            X=X,
+            y=y,
             n_qubits=n_qubits,
-            num_classes=2,
-            task_type="binary",
-            label="circles",
+            n_components=MNIST_PCA_COMPONENTS,
+            label=f"mnist_10class_pca{MNIST_PCA_COMPONENTS}",
+            task_type="multiclass",
+            num_classes=10,
         )
-        
-    elif name == "digits":
-        if len(DIGIT_CLASSES) < 2:
-            raise ValueError("QML_DIGIT_CLASSES must contain at least two digit labels.")
-        n_qubits = 6
-        data = load_digits()
-        df = pd.DataFrame(data.data)
-        df['target'] = data.target
-        df = df[df['target'].isin(DIGIT_CLASSES)].copy()
-        if df.empty:
-            raise ValueError(f"No digit samples found for QML_DIGIT_CLASSES={DIGIT_CLASSES}.")
-        class_map = {digit: idx for idx, digit in enumerate(DIGIT_CLASSES)}
-        df.loc[:, 'target'] = df['target'].map(class_map)
-        X = df.drop(columns=['target']).values
-        y = df['target'].to_numpy(dtype=np.int64)
-        X_train, X_test, y_train, y_test = _stratified_split(X, y)
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
-        X_train, X_test = _normalize_train_test(X_train, X_test)
-        return DatasetBundle(
-            splits=(X_train, X_test, y_train, y_test),
-            input_dim=X_train.shape[1],
-            n_qubits=n_qubits,
-            num_classes=len(DIGIT_CLASSES),
-            task_type="binary" if len(DIGIT_CLASSES) == 2 else "multiclass",
-            label=_digit_label(DIGIT_CLASSES),
-        )
-        
-    elif name == "covtype":
-        n_qubits = 5
-        data = fetch_covtype()
-        X, y = data.data, data.target
-        mask = (y == 1) | (y == 2)
-        X, y = X[mask][:600], (y[mask][:600] - 1).astype(np.int64)
-        X_train, X_test, y_train, y_test = _stratified_split(X, y)
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
-        pca = PCA(n_components=2**n_qubits, random_state=RANDOM_SEED)
-        X_train = pca.fit_transform(X_train)
-        X_test = pca.transform(X_test)
-        X_train, X_test = _normalize_train_test(X_train, X_test)
-        return DatasetBundle(
-            splits=(X_train, X_test, y_train, y_test),
-            input_dim=X_train.shape[1],
-            n_qubits=n_qubits,
-            num_classes=2,
+
+    elif name == "titanic":
+        X, y = _load_titanic_features()
+        return _prep_scaled_pca_dataset(
+            X=X,
+            y=y,
+            n_qubits=3,
+            n_components=8,
+            label="titanic_survival",
             task_type="binary",
-            label="covtype",
+            num_classes=2,
+        )
+
+    elif name == "cytotoxicity":
+        X, y = _load_cytotoxicity_features()
+        return _prep_scaled_pca_dataset(
+            X=X,
+            y=y,
+            n_qubits=3,
+            n_components=None,
+            label="cytotoxicity_median",
+            task_type="binary",
+            num_classes=2,
         )
 
     raise ValueError(f"Unknown dataset: {name}")
@@ -209,6 +291,7 @@ def load_and_prep_dataset(name):
 # ==========================================
 # MODEL DEFINITIONS
 # ==========================================
+
 class ClassicalBaseline(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
@@ -222,7 +305,7 @@ class ClassicalBaseline(nn.Module):
     def forward(self, x): 
         return self.net(x)
 
-# --- THE RAW QUANTUM ENGINES ---
+# --- QUANTUM ENGINES ---
 class StrongQuantumLayer(nn.Module):
     def __init__(self, n_qubits, n_layers=4):
         super().__init__()
@@ -254,7 +337,7 @@ class StrongQuantumVQC(nn.Module):
     def __init__(self, n_qubits, output_dim):
         super().__init__()
         self.quantum = StrongQuantumLayer(n_qubits)
-        self.readout = nn.Linear(n_qubits, output_dim)
+        self.readout = nn.Linear(n_qubits, output_dim, bias=False)
     def forward(self, x):
         return self.readout(self.quantum(x))
 
@@ -262,20 +345,20 @@ class BasicQuantumVQC(nn.Module):
     def __init__(self, n_qubits, output_dim):
         super().__init__()
         self.quantum = BasicQuantumLayer(n_qubits)
-        self.readout = nn.Linear(n_qubits, output_dim)
+        self.readout = nn.Linear(n_qubits, output_dim, bias=False)
     def forward(self, x):
         return self.readout(self.quantum(x))
     
-# --- THE HYBRID QNN  ---
+# --- HYBRID QNN  ---
 class HybridQNN(nn.Module):
     def __init__(self, input_dim, n_qubits, output_dim, n_layers=4):
         super().__init__()
-        # Bottleneck the classical transformation to prevent feature explosion
+        # Bias-free bottleneck keeps the hybrid path from using classical offsets as a crutch.
         hidden_dim = min(input_dim, n_qubits * 2)
-        self.clayer_in = nn.Linear(input_dim, hidden_dim)
-        self.quantum_prepare = nn.Linear(hidden_dim, 2 ** n_qubits)
+        self.clayer_in = nn.Linear(input_dim, hidden_dim, bias=False)
+        self.quantum_prepare = nn.Linear(hidden_dim, 2 ** n_qubits, bias=False)
         self.quantum = StrongQuantumLayer(n_qubits, n_layers)
-        self.clayer_out = nn.Linear(n_qubits, output_dim)
+        self.clayer_out = nn.Linear(n_qubits, output_dim, bias=False)
 
     def forward(self, x):
         x = torch.tanh(self.clayer_in(x))
@@ -292,18 +375,15 @@ class HybridQNN(nn.Module):
 def _output_dim_for_task(num_classes, task_type):
     return 1 if task_type == "binary" else num_classes
 
-
 def _targets_to_tensor(y, task_type):
     if task_type == "binary":
         return torch.tensor(y, dtype=torch.float32).unsqueeze(1)
     return torch.tensor(y, dtype=torch.long)
 
-
 def _criterion_for_task(task_type):
     if task_type == "binary":
         return nn.BCEWithLogitsLoss()
     return nn.CrossEntropyLoss()
-
 
 def _accuracy_from_logits(logits, targets, task_type):
     if task_type == "binary":
@@ -311,7 +391,6 @@ def _accuracy_from_logits(logits, targets, task_type):
         return (preds == targets).float().mean().item()
     preds = torch.argmax(logits, dim=1)
     return (preds == targets).float().mean().item()
-
 
 def train_and_evaluate(model, model_name, dataset_bundle, output_dir=OUTPUT_DIR):
     if hasattr(model, "quantum") and hasattr(model.quantum, "vqc_layer"):
@@ -390,7 +469,7 @@ def train_and_evaluate(model, model_name, dataset_bundle, output_dir=OUTPUT_DIR)
             f"Test Loss: {test_loss:.4f} | Test Acc: {acc*100:.1f}% | "
             f"Time: {end_time - start_time:.2f}s"
         )
-    filename = os.path.join(output_dir, f"03_{model_name}_{dataset_bundle.label}_History.csv")
+    filename = _history_path(output_dir, model_name, dataset_bundle.label)
     save_run_to_csv(filename, history)
     print(f"     Finished! Peak Accuracy: {best_acc*100:.2f}%")
 
@@ -519,19 +598,16 @@ def generate_dataset_diff_graph(dataset_name, csv_path_a, csv_path_b, csv_path_c
     ax2.set_ylim(ymin, ymax)
     plt.tight_layout()
     
-    os.makedirs(output_dir, exist_ok=True)
+    graph_dir = _graph_dir(output_dir)
+    os.makedirs(graph_dir, exist_ok=True)
     clean_name = dataset_name.lower().replace(" ", "_")
-    save_filename = f"{output_dir}/04_Graph_{clean_name}.png"
+    save_filename = os.path.join(graph_dir, f"04_Graph_{clean_name}.png")
     plt.savefig(save_filename, dpi=300)
     if SHOW_PLOTS:
         print(f"Displaying graph pop-up for {dataset_name}...")
         plt.show() 
     plt.close() 
     print(f"Success! Exported comprehensive benchmark analysis for {dataset_name} to {save_filename}\n")
-
-def _history_path(output_dir, model_name, dataset_label):
-    return os.path.join(output_dir, f"03_{model_name}_{dataset_label}_History.csv")
-
 
 def build_models(input_dim, n_qubits, output_dim):
     return {
@@ -540,7 +616,6 @@ def build_models(input_dim, n_qubits, output_dim):
         "Basic_VQC": BasicQuantumVQC(n_qubits, output_dim),
         "Hybrid_QNN": HybridQNN(input_dim, n_qubits, output_dim)
     }
-
 
 def run_benchmarks(datasets=DATASETS_TO_RUN, output_dir=OUTPUT_DIR):
     completed_labels = {}
@@ -558,37 +633,31 @@ def run_benchmarks(datasets=DATASETS_TO_RUN, output_dir=OUTPUT_DIR):
         completed_labels[target_dataset] = dataset_bundle.label
     return completed_labels
 
-
 def build_dataset_benchmarks(completed_labels=None, output_dir=OUTPUT_DIR):
     completed_labels = completed_labels or {}
-    digit_label = completed_labels.get("digits", _digit_label(DIGIT_CLASSES))
+    mnist_label = completed_labels.get("mnist", f"mnist_10class_pca{MNIST_PCA_COMPONENTS}")
+    titanic_label = completed_labels.get("titanic", "titanic_survival")
+    cytotoxicity_label = completed_labels.get("cytotoxicity", "cytotoxicity_median")
     return {
-        "Breast Cancer": {
-            "a": os.path.join(output_dir, "02_Output_BasicHistory.csv"),
-            "b": os.path.join(output_dir, "02_Output_ClassicalHistory.csv"),
-            "c": os.path.join(output_dir, "02_Output_QNNHistory.csv"),
-            "d": os.path.join(output_dir, "02_Output_StrongHistory.csv")
+        "MNIST 10-Class": {
+            "a": _history_path(output_dir, "Basic_VQC", mnist_label),
+            "b": _history_path(output_dir, "Classical_DNN", mnist_label),
+            "c": _history_path(output_dir, "Hybrid_QNN", mnist_label),
+            "d": _history_path(output_dir, "Strong_VQC", mnist_label)
         },
-        "Digits": {
-            "a": _history_path(output_dir, "Basic_VQC", digit_label),
-            "b": _history_path(output_dir, "Classical_DNN", digit_label),
-            "c": _history_path(output_dir, "Hybrid_QNN", digit_label),
-            "d": _history_path(output_dir, "Strong_VQC", digit_label)
+        "Titanic Survival": {
+            "a": _history_path(output_dir, "Basic_VQC", titanic_label),
+            "b": _history_path(output_dir, "Classical_DNN", titanic_label),
+            "c": _history_path(output_dir, "Hybrid_QNN", titanic_label),
+            "d": _history_path(output_dir, "Strong_VQC", titanic_label)
         },
-        "Covtype": {
-            "a": _history_path(output_dir, "Basic_VQC", "covtype"),
-            "b": _history_path(output_dir, "Classical_DNN", "covtype"),
-            "c": _history_path(output_dir, "Hybrid_QNN", "covtype"),
-            "d": _history_path(output_dir, "Strong_VQC", "covtype")
-        },
-        "Circles": {
-            "a": _history_path(output_dir, "Basic_VQC", "circles"),
-            "b": _history_path(output_dir, "Classical_DNN", "circles"),
-            "c": _history_path(output_dir, "Hybrid_QNN", "circles"),
-            "d": _history_path(output_dir, "Strong_VQC", "circles")
+        "Cytotoxicity Median": {
+            "a": _history_path(output_dir, "Basic_VQC", cytotoxicity_label),
+            "b": _history_path(output_dir, "Classical_DNN", cytotoxicity_label),
+            "c": _history_path(output_dir, "Hybrid_QNN", cytotoxicity_label),
+            "d": _history_path(output_dir, "Strong_VQC", cytotoxicity_label)
         }
     }
-
 
 def generate_all_graphs(completed_labels=None, output_dir=OUTPUT_DIR):
     print("Processing Dataset Difference Matrices Interactively...")
@@ -606,12 +675,10 @@ def generate_all_graphs(completed_labels=None, output_dir=OUTPUT_DIR):
             output_dir=output_dir
         )
 
-
 def main():
     completed_labels = run_benchmarks()
     if RUN_GRAPHS:
         generate_all_graphs(completed_labels)
-
 
 if __name__ == "__main__":
     main()
