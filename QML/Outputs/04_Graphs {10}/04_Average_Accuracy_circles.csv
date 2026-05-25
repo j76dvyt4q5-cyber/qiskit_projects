@@ -1,0 +1,11 @@
+Instance,Basic VQC Average Accuracy,Basic VQC Complete Runs,Classical DNN Average Accuracy,Classical DNN Complete Runs,Hybrid QNN Average Accuracy,Hybrid QNN Complete Runs,Strong VQC Average Accuracy,Strong VQC Complete Runs
+1,45.39,10,43.75,10,45.05,10,46.08,10
+2,45.39,10,43.75,10,45.05,10,46.08,10
+3,45.39,10,43.75,10,45.05,10,46.08,10
+4,45.39,10,43.75,10,45.05,10,46.08,10
+5,45.39,10,43.75,10,45.05,10,46.08,10
+6,45.39,10,43.75,10,45.05,10,46.08,10
+7,45.39,10,43.75,10,45.05,10,46.08,10
+8,45.39,10,43.75,10,45.05,10,46.08,10
+9,45.39,10,43.75,10,45.05,10,46.08,10
+10,45.1,10,43.75,10,44.12,10,46.08,10

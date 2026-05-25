@@ -16,12 +16,25 @@ from sklearn.datasets import fetch_covtype, load_digits, make_circles
 import matplotlib.pyplot as plt
 from torch.utils.data import TensorDataset, DataLoader
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+
+def _resolve_output_dir(output_dir):
+    expanded = os.path.expanduser(output_dir)
+    if os.path.isabs(expanded):
+        return os.path.normpath(expanded)
+    normalized = os.path.normpath(expanded)
+    if normalized == "QML" or normalized.startswith(f"QML{os.sep}"):
+        return os.path.normpath(os.path.join(PROJECT_DIR, normalized))
+    return os.path.normpath(os.path.join(SCRIPT_DIR, normalized))
+
 RANDOM_SEED = int(os.getenv("QML_RANDOM_SEED", "42"))
 TEST_SIZE = float(os.getenv("QML_TEST_SIZE", "0.2"))
 N_EPOCHS = int(os.getenv("QML_EPOCHS", "200"))
+AVERAGE_RUN_COUNT = int(os.getenv("QML_AVERAGE_RUN_COUNT", "10"))
 BATCH_SIZE = int(os.getenv("QML_BATCH_SIZE", "32"))
 LEARNING_RATE = float(os.getenv("QML_LEARNING_RATE", "0.02"))
-OUTPUT_DIR = os.getenv("QML_OUTPUT_DIR", "QML/Outputs")
+OUTPUT_DIR = _resolve_output_dir(os.getenv("QML_OUTPUT_DIR", "Outputs"))
 DATASETS_TO_RUN = tuple(
     item.strip() for item in os.getenv("QML_DATASETS", "circles,digits,covtype").split(",") if item.strip()
 )
@@ -29,12 +42,15 @@ DIGIT_CLASSES = tuple(
     int(item.strip()) for item in os.getenv("QML_DIGIT_CLASSES", "0,1,2,3,4,5,6,7,8,9").split(",") if item.strip()
 )
 RUN_GRAPHS = os.getenv("QML_RUN_GRAPHS", "1") != "0"
+REFRESH_GRAPHS_AFTER_MODEL = os.getenv("QML_REFRESH_GRAPHS_AFTER_MODEL", "1") != "0"
 SHOW_PLOTS = os.getenv("QML_SHOW_PLOTS", "0") == "1"
 
 if not 0.0 < TEST_SIZE < 1.0:
     raise ValueError("QML_TEST_SIZE must be between 0 and 1.")
 if N_EPOCHS < 1:
     raise ValueError("QML_EPOCHS must be at least 1.")
+if AVERAGE_RUN_COUNT < 1:
+    raise ValueError("QML_AVERAGE_RUN_COUNT must be at least 1.")
 if BATCH_SIZE < 1:
     raise ValueError("QML_BATCH_SIZE must be at least 1.")
 if len(set(DIGIT_CLASSES)) != len(DIGIT_CLASSES):
@@ -97,6 +113,7 @@ def save_run_to_csv(filename, history_list):
 
 
 def _model_history_dir(output_dir, model_name):
+    output_dir = _resolve_output_dir(output_dir)
     return os.path.join(output_dir, f"03_{model_name}_History {{10}}")
 
 
@@ -108,10 +125,12 @@ def _history_path(output_dir, model_name, dataset_label):
 
 
 def _graph_dir(output_dir):
+    output_dir = _resolve_output_dir(output_dir)
     return os.path.join(output_dir, "04_Graphs {10}")
 
 
 def _cancer_history_path(output_dir, filename):
+    output_dir = _resolve_output_dir(output_dir)
     return os.path.join(output_dir, "02_CancerHistory {All}", filename)
 
 # ==========================================
@@ -254,7 +273,7 @@ class StrongQuantumLayer(nn.Module):
         return self.vqc_layer(x)
 
 class BasicQuantumLayer(nn.Module):
-    def __init__(self, n_qubits, n_layers=4):
+    def __init__(self, n_qubits, n_layers=6):
         super().__init__()
         dev = qml.device("default.qubit", wires=n_qubits)
         @qml.qnode(dev, interface="torch")
@@ -412,62 +431,141 @@ def train_and_evaluate(model, model_name, dataset_bundle, output_dir=OUTPUT_DIR)
 #=========================================
 
 def get_clean_latest_run(file_path):
-    if not os.path.exists(file_path):
+    runs = get_clean_complete_runs(file_path, expected_epochs=None)
+    if not runs:
         return None
+    return runs[-1]
+
+def _csv_rows_to_history_df(rows, header):
+    cleaned_rows = []
+    for row_values in rows:
+        if not row_values or any("===" in value for value in row_values):
+            continue
+        if len(row_values) == len(header):
+            cleaned_rows.append(row_values)
+    if not cleaned_rows:
+        return None
+
+    df = pd.DataFrame(cleaned_rows, columns=header)
+    numeric_columns = ["Epoch", "Total Epochs", "Cost", "Best Cost", "Accuracy", "Best Accuracy", "Time", "Total Time"]
+    for column in numeric_columns:
+        if column in df.columns:
+            df.loc[:, column] = pd.to_numeric(df[column], errors="coerce")
+    df = df.dropna(subset=["Epoch", "Accuracy"]).sort_values("Epoch")
+    if df.empty:
+        return None
+    return df
+
+def get_clean_complete_runs(file_path, expected_epochs=N_EPOCHS):
+    if not os.path.exists(file_path):
+        return []
     with open(file_path, "r") as f:
         rows = list(csv.reader(f))
     if not rows:
-        return None
+        return []
     header = rows[0]
     split_indices = [
         i for i, row in enumerate(rows)
         if row and any("===" in value for value in row)
     ]
-    if len(split_indices) >= 2:
-        data_rows = rows[split_indices[-2] + 1 : split_indices[-1]]
-    elif len(split_indices) == 1:
-        data_rows = rows[1 : split_indices[-1]]
-    else:
-        data_rows = rows[1:]
 
-    cleaned_rows = []
-    for row_values in data_rows:
-        if not row_values or any("===" in value for value in row_values):
+    segments = []
+    start_index = 1
+    for split_index in split_indices:
+        segments.append(rows[start_index:split_index])
+        start_index = split_index + 1
+    if start_index < len(rows):
+        segments.append(rows[start_index:])
+    if not segments:
+        segments = [rows[1:]]
+
+    runs = []
+    for segment in segments:
+        df = _csv_rows_to_history_df(segment, header)
+        if df is None:
             continue
-        if len(row_values) == len(header):
-            cleaned_rows.append(row_values) 
-    if not cleaned_rows:
-        return None
-        
-    df = pd.DataFrame(cleaned_rows, columns=header)
-    
-    df.loc[:, "Epoch"] = pd.to_numeric(df["Epoch"], errors="coerce")
-    df.loc[:, "Accuracy"] = pd.to_numeric(df["Accuracy"], errors="coerce")
-    df = df.dropna(subset=["Epoch", "Accuracy"]).sort_values("Epoch")
-    return df
+        if expected_epochs is not None:
+            df = df[df["Epoch"].between(1, expected_epochs)].copy()
+            df = df.drop_duplicates(subset=["Epoch"], keep="last").sort_values("Epoch")
+            complete_epochs = set(range(1, expected_epochs + 1))
+            if set(df["Epoch"].astype(int)) != complete_epochs:
+                continue
+            df = df.iloc[:expected_epochs].copy()
+        runs.append(df)
+    return runs
 
-def generate_dataset_diff_graph(dataset_name, csv_path_a, csv_path_b, csv_path_c, csv_path_d, 
-                                label_a, label_b, label_c, label_d, output_dir=OUTPUT_DIR):
-    paths = [csv_path_a, csv_path_b, csv_path_c, csv_path_d]
-    labels = [label_a, label_b, label_c, label_d]
+def get_average_complete_run(file_path, expected_epochs=N_EPOCHS):
+    runs = get_clean_complete_runs(file_path, expected_epochs=expected_epochs)
+    if not runs:
+        return None
+    runs = runs[-AVERAGE_RUN_COUNT:]
+
+    summaries = []
+    for instance, run in enumerate(runs, start=1):
+        accuracy = run["Accuracy"].astype(float)
+        if accuracy.max() <= 1.0:
+            accuracy = accuracy * 100
+        summaries.append({
+            "Instance": instance,
+            "Accuracy": float(accuracy.mean()),
+            "Accuracy Std": float(accuracy.std(ddof=0)),
+            "Run Count": len(runs),
+        })
+    return pd.DataFrame(summaries)
+
+def _load_graph_data(paths, labels, dataset_name, use_average=False):
     loaded_datasets = {}
     for label, path in zip(labels, paths):
-        df = get_clean_latest_run(path)
+        if use_average:
+            df = get_average_complete_run(path)
+            missing_message = f"No complete {N_EPOCHS}-epoch runs found"
+        else:
+            df = get_clean_latest_run(path)
+            missing_message = "Clean latest log sequence not found"
         if df is not None and not df.empty:
             loaded_datasets[label] = df
         else:
-            print(f"Skipping model {label} for {dataset_name}: Clean log sequence not found at {path}")     
+            print(f"Skipping model {label} for {dataset_name}: {missing_message} at {path}")
     if len(loaded_datasets) < 4:
         print(f"Aborting plot generation for {dataset_name}: One or more model data components are missing or unreadable.\n")
+        return None
+    return loaded_datasets
+
+def save_average_accuracy_csv(dataset_name, labels, acc_data, run_counts, output_dir=OUTPUT_DIR):
+    graph_dir = _graph_dir(output_dir)
+    os.makedirs(graph_dir, exist_ok=True)
+    clean_name = dataset_name.lower().replace(" ", "_")
+    max_instances = max(len(values) for values in acc_data.values())
+    rows = {"Instance": np.arange(1, max_instances + 1)}
+    for label in labels:
+        values = np.asarray(acc_data[label], dtype=float)
+        rows[f"{label} Average Accuracy"] = np.round(
+            np.pad(values, (0, max_instances - len(values)), constant_values=np.nan),
+            2,
+        )
+        rows[f"{label} Complete Runs"] = run_counts[label]
+    output_path = os.path.join(graph_dir, f"04_Average_Accuracy_{clean_name}.csv")
+    pd.DataFrame(rows).to_csv(output_path, index=False)
+    return output_path
+
+def generate_dataset_diff_graph(dataset_name, csv_path_a, csv_path_b, csv_path_c, csv_path_d, 
+                                label_a, label_b, label_c, label_d, output_dir=OUTPUT_DIR,
+                                use_average=False):
+    paths = [csv_path_a, csv_path_b, csv_path_c, csv_path_d]
+    labels = [label_a, label_b, label_c, label_d]
+    loaded_datasets = _load_graph_data(paths, labels, dataset_name, use_average=use_average)
+    if loaded_datasets is None:
         return
     min_epochs = min(len(df) for df in loaded_datasets.values())
-    epochs = np.arange(1, min_epochs + 1)
+    x_values = np.arange(1, min_epochs + 1)
     acc_data = {}
+    run_counts = {}
     for label, df in loaded_datasets.items():
         acc = df["Accuracy"].iloc[:min_epochs].values
         if acc.max() <= 1.0: 
-            acc = acc * 100 
+            acc = acc * 100
         acc_data[label] = acc
+        run_counts[label] = int(df["Run Count"].iloc[:min_epochs].min()) if "Run Count" in df.columns else 1
 
     design_palette = {
         label_a: {"color": "darkorange", "ls": "-.", "marker": "s"}, 
@@ -477,40 +575,53 @@ def generate_dataset_diff_graph(dataset_name, csv_path_a, csv_path_b, csv_path_c
     }
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6), gridspec_kw={"width_ratios": [2, 1.1]})
-    fig.suptitle(f"Empirical Benchmark Matrix: {dataset_name}", fontsize=16, fontweight="bold", y=0.98)
+    graph_title = "Average Accuracy Benchmark" if use_average else "Empirical Benchmark Matrix"
+    fig.suptitle(f"{graph_title}: {dataset_name}", fontsize=16, fontweight="bold", y=0.98)
 
     for lbl in labels:
-        ax1.plot(epochs, acc_data[lbl], label=lbl, 
+        ax1.plot(x_values, acc_data[lbl], label=lbl, 
                  color=design_palette[lbl]["color"], 
                  linestyle=design_palette[lbl]["ls"], 
                  linewidth=2,
                  marker=design_palette[lbl]["marker"], 
                  markevery=max(1, min_epochs//10), 
                  markersize=6)
-        
-    ax1.set_title("Generalization Accuracy Trajectory Over Epochs", fontsize=11, style="italic")
-    ax1.set_xlabel("Epoch", fontsize=11)
+
+    if use_average:
+        run_summary = ", ".join(f"{lbl}: n={run_counts[lbl]}" for lbl in labels)
+        ax1.set_title(f"Per-Instance Mean Accuracy Across {N_EPOCHS} Epochs\n{run_summary}", fontsize=10, style="italic")
+    else:
+        ax1.set_title("Generalization Accuracy Trajectory Over Epochs", fontsize=11, style="italic")
+    ax1.set_xlabel("Training Instance" if use_average else "Epoch", fontsize=11)
     ax1.set_ylabel("Test Accuracy (%)", fontsize=11)
     ax1.grid(True, linestyle="--", alpha=0.6)
     
-    if min_epochs > 20:
+    if use_average:
+        ax1.set_xticks(x_values)
+    elif min_epochs > 20:
         ticks = [1] + list(range(10, min_epochs + 1, 10))
         ax1.set_xticks(ticks)
     else:
-        ax1.set_xticks(epochs)
+        ax1.set_xticks(x_values)
         
     ax1.legend(loc="lower right", frameon=True, facecolor="white", edgecolor="lightgray", fontsize=10)
 
-    peak_accs = [acc_data[lbl].max() for lbl in labels]
-    final_accs = [acc_data[lbl][-1] for lbl in labels]
-    
     x_bars = np.arange(len(labels))
     bar_width = 0.35
-    
-    bar1 = ax2.bar(x_bars - bar_width/2, peak_accs, bar_width, label="Peak Accuracy", color="forestgreen", alpha=0.85, edgecolor="black", linewidth=0.7)
-    bar2 = ax2.bar(x_bars + bar_width/2, final_accs, bar_width, label="Final Epoch", color="yellowgreen", alpha=0.6, edgecolor="black", linewidth=0.7)
-    
-    ax2.set_title("Peak vs. Terminal Landing Matrix", fontsize=11, style="italic")
+
+    if use_average:
+        mean_accs = [float(np.mean(acc_data[lbl])) for lbl in labels]
+        std_accs = [float(np.std(acc_data[lbl], ddof=0)) for lbl in labels]
+        bar1 = ax2.bar(x_bars, mean_accs, bar_width, yerr=std_accs, label="Mean +/- SD", color="forestgreen", alpha=0.85, edgecolor="black", linewidth=0.7, capsize=4)
+        comparison_values = mean_accs + list(np.concatenate(list(acc_data.values())))
+        ax2.set_title("Instance-Level Stability", fontsize=11, style="italic")
+    else:
+        mean_accs = [float(np.mean(acc_data[lbl])) for lbl in labels]
+        std_accs = [float(np.std(acc_data[lbl], ddof=0)) for lbl in labels]
+        bar1 = ax2.bar(x_bars, mean_accs, bar_width, yerr=std_accs, label="Mean +/- SD", color="forestgreen", alpha=0.85, edgecolor="black", linewidth=0.7, capsize=4)
+        comparison_values = mean_accs + list(np.concatenate(list(acc_data.values())))
+        ax2.set_title("Training-Integrated Stability", fontsize=11, style="italic")
+
     ax2.set_ylabel("Accuracy (%)", fontsize=11)
     ax2.set_xticks(x_bars)
     ax2.set_xticklabels(labels, rotation=15, ha="right", fontsize=10)
@@ -525,7 +636,7 @@ def generate_dataset_diff_graph(dataset_name, csv_path_a, csv_path_b, csv_path_c
                     textcoords="offset points",
                     ha="center", va="bottom", fontsize=9, fontweight="bold")
 
-    all_values = peak_accs + final_accs + list(np.concatenate(list(acc_data.values())))
+    all_values = comparison_values
     ymin = max(0, min(all_values) - 5)
     ymax = min(100, max(all_values) + 10)
     ax1.set_ylim(ymin, ymax)
@@ -535,13 +646,19 @@ def generate_dataset_diff_graph(dataset_name, csv_path_a, csv_path_b, csv_path_c
     graph_dir = _graph_dir(output_dir)
     os.makedirs(graph_dir, exist_ok=True)
     clean_name = dataset_name.lower().replace(" ", "_")
-    save_filename = os.path.join(graph_dir, f"04_Graph_{clean_name}.png")
+    filename_prefix = "04_Average_Graph" if use_average else "04_Graph"
+    save_filename = os.path.join(graph_dir, f"{filename_prefix}_{clean_name}.png")
     plt.savefig(save_filename, dpi=300)
     if SHOW_PLOTS:
         print(f"Displaying graph pop-up for {dataset_name}...")
         plt.show() 
-    plt.close() 
-    print(f"Success! Exported comprehensive benchmark analysis for {dataset_name} to {save_filename}\n")
+    plt.close()
+    if use_average:
+        average_csv = save_average_accuracy_csv(dataset_name, labels, acc_data, run_counts, output_dir=output_dir)
+        print(f"Success! Exported averaged benchmark graph for {dataset_name} to {save_filename}")
+        print(f"         Exported averaged accuracy table to {average_csv}\n")
+    else:
+        print(f"Success! Exported comprehensive benchmark analysis for {dataset_name} to {save_filename}\n")
 
 def build_models(input_dim, n_qubits, output_dim):
     return {
@@ -555,6 +672,7 @@ def run_benchmarks(datasets=DATASETS_TO_RUN, output_dir=OUTPUT_DIR):
     completed_labels = {}
     for target_dataset in datasets:
         dataset_bundle = load_and_prep_dataset(target_dataset)
+        completed_labels[target_dataset] = dataset_bundle.label
         output_dim = _output_dim_for_task(dataset_bundle.num_classes, dataset_bundle.task_type)
         print(
             f"Prepared {dataset_bundle.label}: train={len(dataset_bundle.splits[0])}, "
@@ -564,8 +682,20 @@ def run_benchmarks(datasets=DATASETS_TO_RUN, output_dir=OUTPUT_DIR):
         models = build_models(dataset_bundle.input_dim, dataset_bundle.n_qubits, output_dim)
         for name, model in models.items():
             train_and_evaluate(model, name, dataset_bundle, output_dir=output_dir)
-        completed_labels[target_dataset] = dataset_bundle.label
+            if RUN_GRAPHS and REFRESH_GRAPHS_AFTER_MODEL:
+                generate_all_graphs(
+                    completed_labels=completed_labels,
+                    output_dir=output_dir,
+                    only_dataset_names={_display_name_for_dataset(target_dataset)}
+                )
     return completed_labels
+
+def _display_name_for_dataset(dataset_key):
+    return {
+        "digits": "Digits",
+        "covtype": "Covtype",
+        "circles": "Circles",
+    }.get(dataset_key, dataset_key)
 
 def build_dataset_benchmarks(completed_labels=None, output_dir=OUTPUT_DIR):
     completed_labels = completed_labels or {}
@@ -597,9 +727,11 @@ def build_dataset_benchmarks(completed_labels=None, output_dir=OUTPUT_DIR):
         }
     }
 
-def generate_all_graphs(completed_labels=None, output_dir=OUTPUT_DIR):
+def generate_all_graphs(completed_labels=None, output_dir=OUTPUT_DIR, only_dataset_names=None):
     print("Processing Dataset Difference Matrices Interactively...")
     for name, paths in build_dataset_benchmarks(completed_labels, output_dir).items():
+        if only_dataset_names is not None and name not in only_dataset_names:
+            continue
         generate_dataset_diff_graph(
             dataset_name=name,
             csv_path_a=paths["a"],
@@ -611,6 +743,19 @@ def generate_all_graphs(completed_labels=None, output_dir=OUTPUT_DIR):
             label_c="Hybrid QNN",
             label_d="Strong VQC",
             output_dir=output_dir
+        )
+        generate_dataset_diff_graph(
+            dataset_name=name,
+            csv_path_a=paths["a"],
+            csv_path_b=paths["b"],
+            csv_path_c=paths["c"],
+            csv_path_d=paths["d"],
+            label_a="Basic VQC",
+            label_b="Classical DNN",
+            label_c="Hybrid QNN",
+            label_d="Strong VQC",
+            output_dir=output_dir,
+            use_average=True
         )
 
 def main():
